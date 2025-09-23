@@ -1,0 +1,1 @@
+Design and Implementation of a Modern MLOps Architecture for Plant Biomass Prediction
