@@ -1,0 +1,4 @@
+[core]
+    remote = ssh_remote
+['remote "ssh_remote"']
+    url = ssh://mlflow.nt.fh-koeln.de/home/fhagenbr/dvc-storage-biomass
