@@ -1,0 +1,190 @@
+import os
+import subprocess
+from pathlib import Path
+from typing import Generator
+
+import pandas as pd
+from dagster import asset, MetadataValue
+from PIL import Image
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+LABEL_COLUMN = "fresh_weight_total"
+import numpy as np
+
+GIT_REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
+
+IMAGE_SIZE = (64, 64)  # central place to change feature resolution
+ROW_LIMIT = 100        # subset size for PoC speed
+
+
+def _load_and_flatten(image_path: Path) -> np.ndarray | None:
+    if not image_path.exists():
+        return None
+    with Image.open(image_path).convert("L") as img:
+        return np.array(img.resize(IMAGE_SIZE)).flatten()
+
+
+@asset
+def data_path(context) -> Path:
+    """Load DVC data and return the biomass data directory path."""
+    data_dir = GIT_REPO_ROOT / "data" / "biomass"
+    result = subprocess.run(["dvc", "pull"], capture_output=True, text=True, cwd=GIT_REPO_ROOT)
+    if result.returncode != 0:
+        raise Exception(
+            "dvc pull failed\n" f"stdout:\n{result.stdout}\n" f"stderr:\n{result.stderr}"
+        )
+    context.log.info("DVC sync complete")
+    return data_dir
+
+
+@asset
+def train_table(context, data_path: Path) -> pd.DataFrame:  # type: ignore[override]
+    df = pd.read_csv(data_path / "train.csv")
+    preview = df.head().to_markdown()
+    context.add_output_metadata({"preview": MetadataValue.md(preview)})
+    return df
+
+
+@asset
+def test_table(context, data_path: Path) -> pd.DataFrame:  # type: ignore[override]
+    path = data_path / "test.csv"
+    if not path.exists():
+        context.log.warning("test.csv not found; returning empty DataFrame")
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    preview = df.head().to_markdown()
+    context.add_output_metadata({"preview": MetadataValue.md(preview)})
+    return df
+
+
+@asset
+def train_features(context, train_table: pd.DataFrame, data_path: Path) -> dict:  # type: ignore[override]
+    images_dir = data_path / "images" / "train"
+    features, labels = [], []
+    for _, row in train_table.head(ROW_LIMIT).iterrows():
+        img_path = images_dir / row.get("filename", "")
+        arr = _load_and_flatten(img_path)
+        if arr is not None:
+            features.append(arr)
+            labels.append(row.get("fresh_weight_total"))
+    if not features:
+        return {"X": np.array([]), "y": np.array([]), "scaler": None}
+    scaler = StandardScaler()
+    X = scaler.fit_transform(features)
+    y = np.array(labels)
+    preview_md = (
+        "### Train Features Preview\n"
+        f"- samples: `{X.shape[0]}`\n"
+        f"- feature_dim: `{X.shape[1]}`\n"
+        f"- y_preview: `{y[:5].tolist()}`\n"
+    )
+    context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
+    return {"X": X, "y": y, "scaler": scaler}
+
+
+@asset
+def test_features(context, test_table: pd.DataFrame, train_features: dict, data_path: Path) -> dict:  # type: ignore[override]
+    """Prepare test features (labels OPTIONAL; not used in evaluation now)."""
+    if test_table.empty:
+        context.add_output_metadata({"preview": MetadataValue.md("Empty test table")})
+        return {"X": np.array([]), "y": np.array([]), "labels_present": False}
+    images_dir = data_path / "images" / "test"
+    scaler = train_features.get("scaler")
+    features, labels = [], []
+    label_present = LABEL_COLUMN in test_table.columns
+    for _, row in test_table.head(ROW_LIMIT).iterrows():
+        img_path = images_dir / row.get("filename", "")
+        arr = _load_and_flatten(img_path)
+        if arr is not None:
+            features.append(arr)
+            if label_present:
+                labels.append(row.get(LABEL_COLUMN))
+    if not features:
+        context.add_output_metadata({"preview": MetadataValue.md("No test images produced features")})
+        return {"X": np.array([]), "y": np.array([]), "labels_present": label_present}
+    X = scaler.transform(features) if scaler else np.array(features)
+    y = np.array(labels) if label_present else np.array([])
+    preview_md = (
+        "### Test Features Preview\n"
+        f"- samples: `{X.shape[0]}`\n"
+        f"- feature_dim: `{X.shape[1] if X.ndim==2 else 'NA'}`\n"
+        f"- labels_present: `{label_present}`\n"
+        f"- y_preview: `{y[:5].tolist()}`\n"
+    )
+    context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
+    return {"X": X, "y": y, "labels_present": label_present}
+
+
+@asset
+def train_val_split(context, train_features: dict):  # type: ignore[override]
+    X = train_features["X"]
+    y = train_features["y"]
+    if X.size == 0:
+        return {"X_train": np.array([]), "X_val": np.array([]), "y_train": np.array([]), "y_val": np.array([])}
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    context.add_output_metadata({
+        "preview": MetadataValue.md(
+            "### Train/Val Split\n"
+            f"- train_samples: `{X_train.shape[0]}`\n"
+            f"- val_samples: `{X_val.shape[0]}`\n"
+        )
+    })
+    return {"X_train": X_train, "X_val": X_val, "y_train": y_train, "y_val": y_val}
+
+
+@asset
+def simple_model(context, train_val_split: dict):  # type: ignore[override]
+    X_train = train_val_split["X_train"]
+    y_train = train_val_split["y_train"]
+    if X_train.size == 0:
+        return None
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    if getattr(model, 'coef_', None) is not None and model.coef_.size <= 10:
+        coeffs_preview = {f"w{i}": float(c) for i, c in enumerate(model.coef_)}
+        context.add_output_metadata({
+            "coefficients": MetadataValue.md("\n".join([f"- {k}: {v:.4f}" for k, v in coeffs_preview.items()]))
+        })
+    return model
+
+
+@asset
+def model_evaluation(context, simple_model, train_val_split: dict):  # type: ignore[override]
+    if simple_model is None:
+        return {"error": "Model not trained"}
+    X_val = train_val_split["X_val"]
+    y_val = train_val_split["y_val"]
+    if X_val.size == 0:
+        return {"error": "Empty validation split"}
+    preds = simple_model.predict(X_val)
+    errors = preds - y_val
+    abs_errors = np.abs(errors)
+    mae = float(np.mean(abs_errors))
+    mse = float(np.mean(errors ** 2))
+    ss_res = float(np.sum(errors ** 2))
+    ss_tot = float(np.sum((y_val - np.mean(y_val)) ** 2)) if y_val.size else 0.0
+    r2 = float(1 - ss_res / ss_tot) if ss_tot else float("nan")
+
+    # Percentage-style metric: sMAPE (symmetric MAPE)
+    eps = 1e-9
+    smape = float(np.mean(2 * abs_errors / (np.abs(y_val) + np.abs(preds) + eps))) * 100.0
+
+    preview_md = (
+        "### Validation Metrics\n"
+        f"- samples: `{len(y_val)}`\n"
+        f"- MAE: `{mae:.4f}`\n"
+        f"- MSE: `{mse:.4f}`\n"
+        f"- R2: `{r2:.4f}`\n"
+    f"- sMAPE (%): `{smape:.2f}`\n"
+        f"- preds_preview: `{preds[:5].tolist()}`\n"
+        f"- true_preview: `{y_val[:5].tolist()}`\n"
+    )
+    context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
+    return {
+        "mae": mae,
+        "mse": mse,
+        "r2": r2,
+    "smape_percent": smape,
+        "n": len(y_val),
+    }
