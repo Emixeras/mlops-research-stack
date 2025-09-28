@@ -26,7 +26,7 @@ def _load_and_flatten(image_path: Path) -> np.ndarray | None:
 
 
 @asset
-def data_path(context) -> Path:
+def sync_biomass_data(context) -> Path:
     """Load DVC data and return the biomass data directory path."""
     data_dir = GIT_REPO_ROOT / "data" / "biomass"
     result = subprocess.run(["dvc", "pull"], capture_output=True, text=True, cwd=GIT_REPO_ROOT)
@@ -39,16 +39,16 @@ def data_path(context) -> Path:
 
 
 @asset
-def train_table(context, data_path: Path) -> pd.DataFrame:  # type: ignore[override]
-    df = pd.read_csv(data_path / "train.csv")
+def train_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignore[override]
+    df = pd.read_csv(sync_biomass_data / "train.csv")
     preview = df.head().to_markdown()
     context.add_output_metadata({"preview": MetadataValue.md(preview)})
     return df
 
 
 @asset
-def test_table(context, data_path: Path) -> pd.DataFrame:  # type: ignore[override]
-    path = data_path / "test.csv"
+def test_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignore[override]
+    path = sync_biomass_data / "test.csv"
     if not path.exists():
         context.log.warning("test.csv not found; returning empty DataFrame")
         return pd.DataFrame()
@@ -59,8 +59,8 @@ def test_table(context, data_path: Path) -> pd.DataFrame:  # type: ignore[overri
 
 
 @asset
-def train_features(context, train_table: pd.DataFrame, data_path: Path) -> dict:  # type: ignore[override]
-    images_dir = data_path / "images" / "train"
+def train_features(context, train_table: pd.DataFrame, sync_biomass_data: Path) -> dict:  # type: ignore[override]
+    images_dir = sync_biomass_data / "images" / "train"
     features, labels = [], []
     for _, row in train_table.head(ROW_LIMIT).iterrows():
         img_path = images_dir / row.get("filename", "")
@@ -84,12 +84,12 @@ def train_features(context, train_table: pd.DataFrame, data_path: Path) -> dict:
 
 
 @asset
-def test_features(context, test_table: pd.DataFrame, train_features: dict, data_path: Path) -> dict:  # type: ignore[override]
+def test_features(context, test_table: pd.DataFrame, train_features: dict, sync_biomass_data: Path) -> dict:  # type: ignore[override]
     """Prepare test features (labels OPTIONAL; not used in evaluation now)."""
     if test_table.empty:
         context.add_output_metadata({"preview": MetadataValue.md("Empty test table")})
         return {"X": np.array([]), "y": np.array([]), "labels_present": False}
-    images_dir = data_path / "images" / "test"
+    images_dir = sync_biomass_data / "images" / "test"
     scaler = train_features.get("scaler")
     features, labels = [], []
     label_present = LABEL_COLUMN in test_table.columns
