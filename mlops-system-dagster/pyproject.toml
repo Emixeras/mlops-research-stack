@@ -11,6 +11,12 @@ dependencies = [
     "mlflow",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "dagster-dg-cli",
+]
+
 [dependency-groups]
 dev = [
     "dagster-webserver",

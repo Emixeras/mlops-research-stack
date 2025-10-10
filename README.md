@@ -2,6 +2,19 @@
 
 This repository contains the design and implementation of a modern MLOps architecture for plant biomass prediction using machine learning and DVC for data versioning.
 
+
+## Local services (Docker Compose)
+
+This repo includes a root-level `docker-compose.yml` to run Postgres (for MLflow), MLflow UI, and the Dagster webserver with hot reload.
+
+Services
+- `db`: Postgres 15 (metadata for MLflow), data persisted in named volume `pg_data`
+- `mlflow`: MLflow server (http://localhost:5000), artifacts in named volume `mlflow_artifacts` and served via `--serve-artifacts`
+- `dagster`: Dagster webserver (http://localhost:3000), running `dagster dev` with code hot-reloaded from `mlops-system-dagster/src`
+
+Run
+```powershell
+# Build images
 ## Project Structure
 
 - `data/biomass/` — Contains training and test CSVs and images
@@ -11,6 +24,11 @@ This repository contains the design and implementation of a modern MLOps archite
 ## DVC Setup & Usage
 
 ### Remote Storage
+
+Notes
+- The `mlops-system-dagster` project is bind-mounted into the `dagster` container for live editing.
+- MLflow tracking URI inside the `dagster` container is `http://mlflow:5000`.
+- Postgres is internal-only (no host port exposed) to avoid conflicts.
 
 DVC remote storage is implemented as an SSH server in the folder of `fhagenbr` on the MLflow server `mlflow.nt.fh-koeln.de`, as specified in `/.dvc/config`.
 

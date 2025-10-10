@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mlflow:
+    build:
+      context: ./mlflow-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow-artifacts
+    depends_on:
+      db:
+        condition: service_healthy
+    command: [
+      "mlflow", "server",
+      "--host", "0.0.0.0",
+      "--port", "5000",
+      "--backend-store-uri", "postgresql://mlflow:mlflow_password@db:5432/mlflow",
+      "--artifacts-destination", "file:///mlflow-artifacts",
+      "--serve-artifacts"
+    ]
+    restart: unless-stopped
+
+  dagster:
+    build:
+      context: ./mlops-system-dagster
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DAGSTER_HOME: /dagster_home
+      PYTHONPATH: /workspace/mlops-system-dagster/src
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      DVC_CACHE_DIR: /dvc-cache
+    volumes:
+    # need the workspace(repo root) for dvc/data
+      - .:/workspace
+      - dagster_home:/dagster_home
+      - dvc_cache:/dvc-cache
+      - ${USERPROFILE}/.ssh:/root/.ssh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    command: [
+      "dagster", "dev",
+      "-m", "mlops_system_dagster.definitions",
+      "-h", "0.0.0.0",
+      "-p", "3000"
+    ]
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  mlflow_artifacts:
+  dagster_home:
+  dvc_cache:

@@ -34,8 +34,27 @@ def _load_and_flatten(image_path: Path) -> np.ndarray | None:
 def sync_biomass_data(context) -> Path:
     """Load DVC data and return the biomass data directory path."""
     data_dir = GIT_REPO_ROOT / "data" / "biomass"
+    env = os.environ.copy()
+    # If running in container with mounted cache, configure repo-local cache.dir
+    cache_dir = env.get("DVC_CACHE_DIR") or ("/dvc-cache" if os.path.exists("/dvc-cache") else None)
+    if cache_dir:
+        cfg = subprocess.run(
+            ["dvc", "config", "cache.dir", cache_dir, "--local"],
+            capture_output=True,
+            text=True,
+            cwd=GIT_REPO_ROOT,
+            env=env,
+        )
+        if cfg.returncode != 0:
+            context.log.warning(
+                "Failed to set DVC cache.dir; falling back to default.\n"
+                f"stdout:\n{cfg.stdout}\nstderr:\n{cfg.stderr}"
+            )
+        else:
+            context.log.info(f"Configured DVC cache.dir to {cache_dir}")
+    # Pull data (will reuse cache if configured)
     result = subprocess.run(
-        ["dvc", "pull"], capture_output=True, text=True, cwd=GIT_REPO_ROOT
+        ["dvc", "pull"], capture_output=True, text=True, cwd=GIT_REPO_ROOT, env=env
     )
     if result.returncode != 0:
         raise Exception(
@@ -45,7 +64,6 @@ def sync_biomass_data(context) -> Path:
         )
     context.log.info("DVC sync complete")
     return data_dir
-
 
 @asset
 def train_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignore[override]
@@ -166,7 +184,7 @@ def simple_model(context, train_val_split: dict):  # type: ignore[override]
 
     # Simple MLflow logging
     try:
-        mlflow.set_tracking_uri("http://localhost:5000")
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
         with mlflow.start_run(run_name="biomass_linear_regression") as run:
             mlflow.log_param("model_type", "LinearRegression")
             mlflow.log_param("n_features", X_train.shape[1])
@@ -224,7 +242,7 @@ def model_evaluation(context, simple_model, train_val_split: dict):  # type: ign
 
     # Try to log metrics to MLflow with error handling
     try:
-        mlflow.set_tracking_uri("http://localhost:5000")
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
 
         # Get the most recent run and log metrics to it
         experiment = mlflow.get_experiment_by_name("Default")
