@@ -8,6 +8,7 @@ dependencies = [
     "pandas",
     "scikit-learn",
     "Pillow",
+    "mlflow",
 ]
 
 [dependency-groups]
