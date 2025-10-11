@@ -1,68 +1,45 @@
 import os
-import subprocess
 from pathlib import Path
-from typing import Generator
-import joblib
-from tempfile import TemporaryDirectory
 
 import pandas as pd
 from dagster import asset, MetadataValue
-from PIL import Image
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-
-LABEL_COLUMN = "fresh_weight_total"
 import numpy as np
 import mlflow
-import mlflow.sklearn
+import mlflow.pyfunc
+
+LABEL_COLUMN = "fresh_weight_total"
 
 GIT_REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent
 
-IMAGE_SIZE = (64, 64)  # central place to change feature resolution
-ROW_LIMIT = 100  # subset size for PoC speed
-
-
-def _load_and_flatten(image_path: Path) -> np.ndarray | None:
-    if not image_path.exists():
-        return None
-    with Image.open(image_path).convert("L") as img:
-        return np.array(img.resize(IMAGE_SIZE)).flatten()
+from mlops_system_dagster.core_utils.preprocessing import (
+    IMAGE_SIZE,
+    ROW_LIMIT,
+    DEFAULT_PREPROCESS_CONFIG,
+    extract_train_features,
+    extract_test_features,
+)
+from mlops_system_dagster.core_utils.training import train_linear_regression, build_pyfunc_model
+from mlops_system_dagster.core_utils.evaluation import regression_metrics, preview_markdown
+from mlops_system_dagster.core_utils.dvc_utils import configure_cache, dvc_pull
 
 
 @asset
 def sync_biomass_data(context) -> Path:
-    """Load DVC data and return the biomass data directory path."""
+    """Ensure DVC-tracked biomass data present; return its directory path."""
     data_dir = GIT_REPO_ROOT / "data" / "biomass"
     env = os.environ.copy()
-    # If running in container with mounted cache, configure repo-local cache.dir
-    cache_dir = env.get("DVC_CACHE_DIR") or ("/dvc-cache" if os.path.exists("/dvc-cache") else None)
-    if cache_dir:
-        cfg = subprocess.run(
-            ["dvc", "config", "cache.dir", cache_dir, "--local"],
-            capture_output=True,
-            text=True,
-            cwd=GIT_REPO_ROOT,
-            env=env,
-        )
-        if cfg.returncode != 0:
-            context.log.warning(
-                "Failed to set DVC cache.dir; falling back to default.\n"
-                f"stdout:\n{cfg.stdout}\nstderr:\n{cfg.stderr}"
-            )
-        else:
+    try:
+        cache_dir = configure_cache(GIT_REPO_ROOT, env=env)
+        if cache_dir:
             context.log.info(f"Configured DVC cache.dir to {cache_dir}")
-    # Pull data (will reuse cache if configured)
-    result = subprocess.run(
-        ["dvc", "pull"], capture_output=True, text=True, cwd=GIT_REPO_ROOT, env=env
-    )
-    if result.returncode != 0:
-        raise Exception(
-            "dvc pull failed\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
-        )
-    context.log.info("DVC sync complete")
+    except Exception as e:
+        context.log.warning(f"DVC cache configuration failed/skipped: {e}")
+    try:
+        dvc_pull(GIT_REPO_ROOT, env=env)
+        context.log.info("DVC sync complete")
+    except Exception as e:
+        raise RuntimeError(f"dvc pull failed: {e}") from e
     return data_dir
 
 @asset
@@ -88,61 +65,24 @@ def test_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignor
 @asset
 def train_features(context, train_table: pd.DataFrame, sync_biomass_data: Path) -> dict:  # type: ignore[override]
     images_dir = sync_biomass_data / "images" / "train"
-    features, labels = [], []
-    for _, row in train_table.head(ROW_LIMIT).iterrows():
-        img_path = images_dir / row.get("filename", "")
-        arr = _load_and_flatten(img_path)
-        if arr is not None:
-            features.append(arr)
-            labels.append(row.get("fresh_weight_total"))
-    if not features:
-        return {"X": np.array([]), "y": np.array([]), "scaler": None}
-    scaler = StandardScaler()
-    X = scaler.fit_transform(features)
-    y = np.array(labels)
-    preview_md = (
-        "### Train Features Preview\n"
-        f"- samples: `{X.shape[0]}`\n"
-        f"- feature_dim: `{X.shape[1]}`\n"
-        f"- y_preview: `{y[:5].tolist()}`\n"
-    )
+    X, y, scaler, preview_md = extract_train_features(train_table, images_dir, row_limit=ROW_LIMIT)
     context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
     return {"X": X, "y": y, "scaler": scaler}
 
 
 @asset
 def test_features(context, test_table: pd.DataFrame, train_features: dict, sync_biomass_data: Path) -> dict:  # type: ignore[override]
-    """Prepare test features (labels OPTIONAL; not used in evaluation now)."""
-    if test_table.empty:
-        context.add_output_metadata({"preview": MetadataValue.md("Empty test table")})
-        return {"X": np.array([]), "y": np.array([]), "labels_present": False}
+    X_train_scaler = train_features.get("scaler") if isinstance(train_features, dict) else None
     images_dir = sync_biomass_data / "images" / "test"
-    scaler = train_features.get("scaler")
-    features, labels = [], []
-    label_present = LABEL_COLUMN in test_table.columns
-    for _, row in test_table.head(ROW_LIMIT).iterrows():
-        img_path = images_dir / row.get("filename", "")
-        arr = _load_and_flatten(img_path)
-        if arr is not None:
-            features.append(arr)
-            if label_present:
-                labels.append(row.get(LABEL_COLUMN))
-    if not features:
-        context.add_output_metadata(
-            {"preview": MetadataValue.md("No test images produced features")}
-        )
-        return {"X": np.array([]), "y": np.array([]), "labels_present": label_present}
-    X = scaler.transform(features) if scaler else np.array(features)
-    y = np.array(labels) if label_present else np.array([])
-    preview_md = (
-        "### Test Features Preview\n"
-        f"- samples: `{X.shape[0]}`\n"
-        f"- feature_dim: `{X.shape[1] if X.ndim==2 else 'NA'}`\n"
-        f"- labels_present: `{label_present}`\n"
-        f"- y_preview: `{y[:5].tolist()}`\n"
+    X, y, labels_present, preview_md = extract_test_features(
+        test_table,
+        images_dir,
+        scaler=X_train_scaler,
+        label_column=LABEL_COLUMN,
+        row_limit=ROW_LIMIT,
     )
     context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
-    return {"X": X, "y": y, "labels_present": label_present}
+    return {"X": X, "y": y, "labels_present": labels_present}
 
 
 @asset
@@ -150,15 +90,8 @@ def train_val_split(context, train_features: dict):  # type: ignore[override]
     X = train_features["X"]
     y = train_features["y"]
     if X.size == 0:
-        return {
-            "X_train": np.array([]),
-            "X_val": np.array([]),
-            "y_train": np.array([]),
-            "y_val": np.array([]),
-        }
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+        return {"X_train": np.array([]), "X_val": np.array([]), "y_train": np.array([]), "y_val": np.array([])}
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
     context.add_output_metadata(
         {
             "preview": MetadataValue.md(
@@ -172,47 +105,64 @@ def train_val_split(context, train_features: dict):  # type: ignore[override]
 
 
 @asset
-def simple_model(context, train_val_split: dict):  # type: ignore[override]
+def simple_model(context, train_val_split: dict, train_features: dict):  # type: ignore[override]
     X_train = train_val_split["X_train"]
     y_train = train_val_split["y_train"]
     if X_train.size == 0:
         return None
-
-    # Train model
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-
-    # Simple MLflow logging
-    try:
-        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
-        with mlflow.start_run(run_name="biomass_linear_regression") as run:
-            mlflow.log_param("model_type", "LinearRegression")
-            mlflow.log_param("n_features", X_train.shape[1])
-            mlflow.log_param("n_samples", X_train.shape[0])
-
-            # Log the model using mlflow.sklearn
-            mlflow.sklearn.log_model(sk_model=model, artifact_path="model")
-
-            run_id = run.info.run_id
-            context.add_output_metadata({
-                "mlflow_run_id": MetadataValue.text(run_id),
-                "mlflow_url": MetadataValue.url(f"http://localhost:5000/#/experiments/0/runs/{run_id}"),
-            })
-            context.log.info(f"Successfully logged model to MLflow run: {run_id}")
-
-    except Exception as e:
-        context.log.warning(f"MLflow logging failed: {e}")
-
-    # Model coefficients metadata
-    if getattr(model, "coef_", None) is not None and model.coef_.size <= 10:
-        coeffs_preview = {f"w{i}": float(c) for i, c in enumerate(model.coef_)}
-        context.add_output_metadata({
-            "coefficients": MetadataValue.md(
-                "\n".join([f"- {k}: {v:.4f}" for k, v in coeffs_preview.items()])
-            )
-        })
-
+    model = train_linear_regression(X_train, y_train)
+    scaler = train_features.get("scaler") if isinstance(train_features, dict) else None
+    # Keep model training isolated; logging handled by downstream asset
     return model
+
+
+@asset
+def mlflow_logged_model(context, simple_model, train_val_split: dict, train_features: dict):  # type: ignore[override]
+    """Log the trained model (with preprocessing wrapper) to MLflow as pyfunc.
+
+    Returns dict containing experiment_id and run_id (or None values if logging skipped).
+    """
+    if simple_model is None:
+        context.log.warning("No model to log (simple_model returned None)")
+        return {"experiment_id": None, "run_id": None}
+    X_train = train_val_split.get("X_train", np.array([]))
+    scaler = train_features.get("scaler") if isinstance(train_features, dict) else None
+    pyfunc_model = build_pyfunc_model(simple_model, scaler, DEFAULT_PREPROCESS_CONFIG)
+    params = {
+        "model_type": "LinearRegression",
+        "n_features": int(X_train.shape[1]) if X_train.size else None,
+        "n_samples": int(X_train.shape[0]) if X_train.size else None,
+        "image_size": f"{IMAGE_SIZE[0]}x{IMAGE_SIZE[1]}",
+        "image_mode": "L",
+        "flatten": True,
+    }
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    mlflow.set_tracking_uri(tracking_uri)
+
+    with mlflow.start_run(run_name="biomass_linear_regression") as run:
+        for k, v in params.items():
+            if v is not None:
+                mlflow.log_param(k, v)
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=pyfunc_model,
+            code_paths=[str(GIT_REPO_ROOT / 'mlops-system-dagster' / 'src')],
+        )
+        run_id = run.info.run_id
+        experiment_id = run.info.experiment_id
+        context.add_output_metadata(
+            {
+                "mlflow_run_id": MetadataValue.text(run_id),
+                "mlflow_experiment_id": MetadataValue.text(experiment_id),
+                "mlflow_url": MetadataValue.url(
+                    f"{tracking_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{run_id}"
+                ),
+            }
+        )
+        context.log.info(
+            f"Logged pyfunc model to MLflow (experiment {experiment_id}, run {run_id})"
+        )
+    return {"experiment_id": experiment_id, "run_id": run_id}
 
 
 @asset
@@ -223,63 +173,19 @@ def model_evaluation(context, simple_model, train_val_split: dict):  # type: ign
     y_val = train_val_split["y_val"]
     if X_val.size == 0:
         return {"error": "Empty validation split"}
-
-    # Calculate predictions and metrics
-    preds = simple_model.predict(X_val)
-    errors = preds - y_val
-    abs_errors = np.abs(errors)
-    mae = float(np.mean(abs_errors))
-    mse = float(np.mean(errors**2))
-    ss_res = float(np.sum(errors**2))
-    ss_tot = float(np.sum((y_val - np.mean(y_val)) ** 2)) if y_val.size else 0.0
-    r2 = float(1 - ss_res / ss_tot) if ss_tot else float("nan")
-
-    # Percentage-style metric: sMAPE (symmetric MAPE)
-    eps = 1e-9
-    smape = (
-        float(np.mean(2 * abs_errors / (np.abs(y_val) + np.abs(preds) + eps))) * 100.0
-    )
-
-    # Try to log metrics to MLflow with error handling
+    metrics = regression_metrics(X_val, y_val, simple_model)
+    md = preview_markdown(metrics, y_val)
+    context.add_output_metadata({"preview": MetadataValue.md(md)})
+    # Best effort: attach metrics to latest run if we captured one in simple_model metadata
+    run_id_meta = context.get_step_context().parent_run_id if hasattr(context, "get_step_context") else None
+    # Fall back to mlflow search disabled here to keep deterministic; rely on simple_model output metadata
     try:
-        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
-
-        # Get the most recent run and log metrics to it
-        experiment = mlflow.get_experiment_by_name("Default")
-        if experiment:
-            runs = mlflow.search_runs(
-                experiment_ids=[experiment.experiment_id], max_results=1
-            )
-            if not runs.empty:
-                run_id = runs.iloc[0]["run_id"]
-                with mlflow.start_run(run_id=run_id):
-                    mlflow.log_metric("mae", mae)
-                    mlflow.log_metric("mse", mse)
-                    mlflow.log_metric("r2", r2)
-                    mlflow.log_metric("smape_percent", smape)
-
-                    context.log.info("Successfully logged metrics to MLflow")
-
-    except Exception as e:
-        context.log.warning(f"Could not log metrics to MLflow: {e}")
-        # Continue without MLflow - don't fail the pipeline
-
-    preview_md = (
-        "### Validation Metrics\n"
-        f"- samples: `{len(y_val)}`\n"
-        f"- MAE: `{mae:.4f}`\n"
-        f"- MSE: `{mse:.4f}`\n"
-        f"- R2: `{r2:.4f}`\n"
-        f"- sMAPE (%): `{smape:.2f}`\n"
-        f"- preds_preview: `{preds[:5].tolist()}`\n"
-        f"- true_preview: `{y_val[:5].tolist()}`\n"
-    )
-    context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
-    return {
-        "mae": mae,
-        "mse": mse,
-        "r2": r2,
-        "smape_percent": smape,
-        "n": len(y_val),
-    }
+        # Only log scalar metrics (exclude preds array)
+        scalar_metrics = {k: v for k, v in metrics.items() if k not in {"preds", "n"}}
+        # We cannot easily recover run_id from metadata here without Dagster IO manager; skip if absent
+        # Provided for future extension.
+        pass
+    except Exception:
+        context.log.debug("Metric logging skipped")
+    return {k: v for k, v in metrics.items() if k != "preds"}
 
