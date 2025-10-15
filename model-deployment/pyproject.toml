@@ -1,0 +1,11 @@
+[project]
+name = "model-deployment"
+version = "0.1.0"
+description = "Model serving with gradio"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "gradio>=5.49.1",
+    "mlflow>=3.4.0",
+    "psutil==7.1.0"
+]
