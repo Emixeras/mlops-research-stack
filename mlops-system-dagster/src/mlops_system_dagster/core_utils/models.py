@@ -31,7 +31,6 @@ class LinearRegressionBiomassModel(mlflow.pyfunc.PythonModel):
             return []
         feats = [prepare_image(img, config=self.config) for img in images]
         X = np.stack(feats, axis=0)
-        if self.scaler is not None:
-            X = self.scaler.transform(X)
-        preds = self.regressor.predict(X)
+        X = self.scaler.transform(X)
+        preds = self.regressor.predict(X) 
         return preds.tolist()

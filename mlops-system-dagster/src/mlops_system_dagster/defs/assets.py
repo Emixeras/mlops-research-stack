@@ -143,10 +143,12 @@ def mlflow_logged_model(context, simple_model, train_val_split: dict, train_feat
         for k, v in params.items():
             if v is not None:
                 mlflow.log_param(k, v)
+        # Use the actual package directory (not the parent 'src') so MLflow adds correct import path
+        package_dir = GIT_REPO_ROOT / 'mlops-system-dagster' / 'src' / 'mlops_system_dagster'
         mlflow.pyfunc.log_model(
             artifact_path="model",
             python_model=pyfunc_model,
-            code_paths=[str(GIT_REPO_ROOT / 'mlops-system-dagster' / 'src')],
+            code_paths=[str(package_dir)],
         )
         run_id = run.info.run_id
         experiment_id = run.info.experiment_id
@@ -162,30 +164,41 @@ def mlflow_logged_model(context, simple_model, train_val_split: dict, train_feat
         context.log.info(
             f"Logged pyfunc model to MLflow (experiment {experiment_id}, run {run_id})"
         )
-    return {"experiment_id": experiment_id, "run_id": run_id}
+    return {"experiment_id": experiment_id, "run_id": run_id, "regressor": simple_model}
 
 
 @asset
-def model_evaluation(context, simple_model, train_val_split: dict):  # type: ignore[override]
-    if simple_model is None:
-        return {"error": "Model not trained"}
+def model_evaluation(context, train_val_split: dict, mlflow_logged_model: dict):  # type: ignore[override]
+    """Compute validation metrics using the same fitted regressor bundled in mlflow_logged_model and log to that run.
+
+    Assumes mlflow_logged_model returned a dict containing 'regressor' and 'run_id'.
+    Fails fast if required pieces are missing.
+    """
+    if not isinstance(mlflow_logged_model, dict):
+        raise ValueError("mlflow_logged_model output malformed (expected dict).")
+    regressor = mlflow_logged_model.get("regressor")
+    run_id = mlflow_logged_model.get("run_id")
+    if regressor is None:
+        raise ValueError("Missing 'regressor' in mlflow_logged_model output.")
+    if not run_id:
+        raise ValueError("Missing 'run_id' in mlflow_logged_model output.")
     X_val = train_val_split["X_val"]
     y_val = train_val_split["y_val"]
     if X_val.size == 0:
-        return {"error": "Empty validation split"}
-    metrics = regression_metrics(X_val, y_val, simple_model)
+        raise ValueError("Empty validation split; cannot evaluate.")
+    metrics = regression_metrics(X_val, y_val, regressor)
     md = preview_markdown(metrics, y_val)
     context.add_output_metadata({"preview": MetadataValue.md(md)})
-    # Best effort: attach metrics to latest run if we captured one in simple_model metadata
-    run_id_meta = context.get_step_context().parent_run_id if hasattr(context, "get_step_context") else None
-    # Fall back to mlflow search disabled here to keep deterministic; rely on simple_model output metadata
-    try:
-        # Only log scalar metrics (exclude preds array)
-        scalar_metrics = {k: v for k, v in metrics.items() if k not in {"preds", "n"}}
-        # We cannot easily recover run_id from metadata here without Dagster IO manager; skip if absent
-        # Provided for future extension.
-        pass
-    except Exception:
-        context.log.debug("Metric logging skipped")
+
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
+    with mlflow.start_run(run_id=run_id):
+        scalar_metrics = {k: v for k, v in metrics.items() if k not in {"preds"}}
+        mlflow.log_metrics({k: float(v) for k, v in scalar_metrics.items() if isinstance(v, (int, float))})
+        preview_art = {
+            "preds_preview": metrics["preds"][:25].tolist(),
+            "y_preview": y_val[:25].tolist(),
+            "n_total": int(metrics["n"]),
+        }
+        mlflow.log_dict(preview_art, "evaluation/pred_preview.json")
     return {k: v for k, v in metrics.items() if k != "preds"}
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from typing import Any, List, Tuple
+from sklearn.preprocessing import StandardScaler
 
 import numpy as np
 from PIL import Image
@@ -67,11 +68,6 @@ def prepare_image(img: Image.Image, *, config: dict | None = None) -> np.ndarray
     if cfg.get("flatten", FLATTEN):
         return arr.flatten()
     return arr
-
-
-# --- Feature extraction (moved from former features.py) ---
-from sklearn.preprocessing import StandardScaler  # local import to avoid hard dep at import time elsewhere
-
 
 def extract_train_features(
     df,
