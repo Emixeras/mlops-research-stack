@@ -9,6 +9,7 @@ dependencies = [
     "scikit-learn",
     "Pillow",
     "mlflow",
+    "debugpy"
 ]
 
 [project.optional-dependencies]

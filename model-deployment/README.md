@@ -35,3 +35,12 @@ uv run python app.py
 | `MLFLOW_TRACKING_URI` | `http://localhost:5000` |
 | `GRADIO_SERVER_NAME` | `0.0.0.0` (in Docker) |
 | `GRADIO_SERVER_PORT` | `7860` |
+| `DEBUG` | unset (set to `1` for debugging) |
+
+## Debugging
+
+Set `DEBUG=1` in docker-compose.yml, then:
+1. Start containers: `docker compose up`
+2. Wait for "🐛 Waiting for debugger..."
+3. Press **F5** in VS Code (or Run → "Debug Docker App")
+4. Set breakpoints and debug normally

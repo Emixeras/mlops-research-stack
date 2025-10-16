@@ -8,4 +8,6 @@ dependencies = [
     "gradio>=5.49.1",
     "mlflow>=3.4.0",
     "psutil==7.1.0"
+    "pandas",
+    "debugpy"
 ]

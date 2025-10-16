@@ -52,10 +52,11 @@ dg dev
 
 Open http://localhost:3000 in your browser to see the project.
 
-## Learn more
+## Debugging
 
-To learn more about this template and Dagster in general:
-
-- [Dagster Documentation](https://docs.dagster.io/)
-- [Dagster University](https://courses.dagster.io/)
-- [Dagster Slack Community](https://dagster.io/slack)
+**Local debugging:**
+1. Keep dependencies running: `docker compose up -d`
+2. Stop Dagster container: `docker compose stop dagster`
+3. Go to Run and Debug → Select "Dagster Local"
+4. Set breakpoints and trigger materializations at http://localhost:3000
+5. When done: `docker compose up -d` to restart all services

@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Gradio",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {"host": "localhost", "port": 5678},
+      "pathMappings": [
+        {"localRoot": "${workspaceFolder}/model-deployment", "remoteRoot": "/app"}
+      ]
+    },
+{
+  "name": "Dagster Local",
+  "type": "debugpy",
+  "request": "launch",
+  "module": "dagster",
+  "args": ["dev"],
+  "cwd": "${workspaceFolder}/mlops-system-dagster",
+  "env": {
+    "MLFLOW_TRACKING_URI": "http://localhost:5000"
+  }
+}
+  ]
+}
