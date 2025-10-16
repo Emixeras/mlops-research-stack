@@ -39,7 +39,12 @@ def _list_registered_model_versions(client: MlflowClient) -> List[str]:
         except Exception:
             continue
         for v in versions:
-            uris.append(f"models:/{name}/{v.version}")
+            full_version = client.get_model_version(name, v.version)
+            aliases = full_version.aliases
+            
+            alias_str = f" 🏷️ {', '.join(aliases)}" if aliases else ""
+            label = f"{name} v{v.version}{alias_str}"
+            uris.append(label)
     print(uris)
     return sorted(uris)
 
@@ -63,7 +68,19 @@ def predict(model_uri: str, files: Optional[List[gr.File]]) -> pd.DataFrame:
         return pd.DataFrame([{"error": "No model selected"}])
     if not files:
         return pd.DataFrame([{"error": "No images uploaded"}])
-    model = _load_model(model_uri)
+    # Extract actual URI (strip alias annotation if present)
+    # Format: "name vVersion 🏷️ alias1, alias2" -> "models:/name/version"
+    # Split on emoji to get clean model info
+    model_info = model_uri.split(" 🏷️")[0] if " 🏷️" in model_uri else model_uri
+    # Parse name and version from format "name vVersion"
+    parts = model_info.rsplit(" v", 1)
+    if len(parts) == 2:
+        name, version = parts
+        actual_uri = f"models:/{name}/{version}"
+    else:
+        # Fallback if format doesn't match
+        actual_uri = model_uri
+    model = _load_model(actual_uri)
     # Convert each file to bytes (model wrapper accepts bytes)
     payload: List[bytes] = []
     names: List[str] = []
@@ -124,6 +141,13 @@ def build_interface() -> gr.Blocks:
 
 if __name__ == "__main__":
     _init_tracking_uri()
+    
+    # Debug setup
+    if os.getenv("DEBUG"):
+        import debugpy
+        debugpy.listen(("0.0.0.0", 5678))
+        print("🐛 Waiting for debugger on port 5678...")
+        debugpy.wait_for_client()
+    
     iface = build_interface()
-    # You can change server_name / port via env: GRADIO_SERVER_NAME / GRADIO_SERVER_PORT
-    iface.launch()  # share=True for public link if needed
+    iface.launch()
