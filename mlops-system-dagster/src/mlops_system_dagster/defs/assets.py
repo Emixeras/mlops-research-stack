@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from mlops_system_dagster.defs.resources import TrainValSplitConfig
 import pandas as pd
 from dagster import asset, MetadataValue
 from sklearn.model_selection import train_test_split
@@ -22,7 +23,10 @@ from mlops_system_dagster.core_utils.preprocessing import (
 from mlops_system_dagster.core_utils.training import train_linear_regression, build_pyfunc_model
 from mlops_system_dagster.core_utils.evaluation import regression_metrics, preview_markdown
 from mlops_system_dagster.core_utils.dvc_utils import configure_cache, dvc_pull
-
+from mlops_system_dagster.core_utils.schemas import (
+    TrainFeaturesPayload,
+    TrainValSplitPayload,
+)
 
 @asset
 def sync_biomass_data(context) -> Path:
@@ -66,8 +70,9 @@ def test_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignor
 def train_features(context, train_table: pd.DataFrame, sync_biomass_data: Path) -> dict:  # type: ignore[override]
     images_dir = sync_biomass_data / "images" / "train"
     X, y, scaler, preview_md = extract_train_features(train_table, images_dir, row_limit=ROW_LIMIT)
+    payload = TrainFeaturesPayload(X=X, y=y, scaler=scaler)
     context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
-    return {"X": X, "y": y, "scaler": scaler}
+    return payload.model_dump()
 
 
 @asset
@@ -86,22 +91,34 @@ def test_features(context, test_table: pd.DataFrame, train_features: dict, sync_
 
 
 @asset
-def train_val_split(context, train_features: dict):  # type: ignore[override]
-    X = train_features["X"]
-    y = train_features["y"]
-    if X.size == 0:
-        return {"X_train": np.array([]), "X_val": np.array([]), "y_train": np.array([]), "y_val": np.array([])}
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+def train_val_split(context, train_features: dict, config: TrainValSplitConfig) -> dict:
+    """Splits features into train/validation sets based on config."""
+    features = TrainFeaturesPayload.model_validate(train_features)
+    # The 'config' parameter is now directly injected by Dagster and already validated.
+    test_size = config.test_size
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        features.X,
+        features.y,
+        test_size=test_size,
+        random_state=42,
+    )
+
+    payload = TrainValSplitPayload(
+        X_train=X_train,
+        X_val=X_val,
+        y_train=y_train,
+        y_val=y_val,
+    )
     context.add_output_metadata(
         {
             "preview": MetadataValue.md(
-                "### Train/Val Split\n"
-                f"- train_samples: `{X_train.shape[0]}`\n"
-                f"- val_samples: `{X_val.shape[0]}`\n"
+                f"### Train/Val Split\n- train_samples: `{X_train.shape[0]}`\n"
+                f"- val_samples: `{X_val.shape[0]}`\n- test_size: `{test_size}`"
             )
         }
     )
-    return {"X_train": X_train, "X_val": X_val, "y_train": y_train, "y_val": y_val}
+    return payload.model_dump()
 
 
 @asset

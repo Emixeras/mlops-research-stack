@@ -207,6 +207,7 @@ __marimo__/
 dagster_home/
 dagster_run_history/
 dagster_storage/
+dagster_outputs/
 **/runs.db
 **/storage/*
 **/history/*
