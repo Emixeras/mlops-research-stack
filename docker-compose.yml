@@ -1,4 +1,21 @@
 services:
+  traefik:
+    image: traefik:v3.5
+    command:
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8000:80"    # HTTP (use "80:80" in production)
+      - "8080:8080"  # Traefik dashboard
+      # - "443:443"  # HTTPS (uncomment for production)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-users.txt:/traefik-users.txt:ro
+    restart: unless-stopped
+
   db:
     image: postgres:15
     environment:
@@ -7,6 +24,7 @@ services:
       POSTGRES_PASSWORD: mlflow_password
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
       interval: 5s
@@ -17,8 +35,6 @@ services:
   mlflow:
     build:
       context: ./mlflow-server
-    ports:
-      - "5000:5000"
     volumes:
       - mlflow_artifacts:/mlflow-artifacts
     depends_on:
@@ -32,14 +48,20 @@ services:
       "--artifacts-destination", "file:///mlflow-artifacts",
       "--serve-artifacts"
     ]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mlflow.rule=Host(`mlflow.localhost`)"
+      # For production, change to: Host(`mlflow.yourdomain.com`)
+      - "traefik.http.services.mlflow.loadbalancer.server.port=5000"
+      # Enable Basic Auth (comment out to disable)
+      - "traefik.http.routers.mlflow.middlewares=mlflow-auth"
+      - "traefik.http.middlewares.mlflow-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
 
   dagster:
     build:
       context: ./mlops-system-dagster
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"  # Dagster UI
     environment:
       DAGSTER_HOME: /dagster_home
       PYTHONPATH: /workspace/mlops-system-dagster/src
@@ -62,6 +84,14 @@ services:
       "-h", "0.0.0.0",
       "-p", "3000"
     ]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dagster.rule=Host(`dagster.localhost`)"
+      # For production, change to: Host(`dagster.yourdomain.com`)
+      - "traefik.http.services.dagster.loadbalancer.server.port=3000"
+      # Enable Basic Auth (comment out to disable)
+      - "traefik.http.routers.dagster.middlewares=dagster-auth"
+      - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
 
   model-deployment:
@@ -77,11 +107,18 @@ services:
       mlflow:
         condition: service_started
     ports:
-    - "7860:7860"
     - "5678:5678"  # Debug port
     command: [
       "python", "app.py"
     ]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gradio.rule=Host(`gradio.localhost`)"
+      # For production, change to: Host(`gradio.yourdomain.com`)
+      - "traefik.http.services.gradio.loadbalancer.server.port=7860"
+      # Enable Basic Auth (comment out to make Gradio public)
+      - "traefik.http.routers.gradio.middlewares=gradio-auth"
+      - "traefik.http.middlewares.gradio-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
 
 volumes:
