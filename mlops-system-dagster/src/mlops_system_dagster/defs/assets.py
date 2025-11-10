@@ -22,15 +22,22 @@ from mlops_system_dagster.core_utils.preprocessing import (
 )
 from mlops_system_dagster.core_utils.training import train_linear_regression, build_pyfunc_model
 from mlops_system_dagster.core_utils.evaluation import regression_metrics, preview_markdown
-from mlops_system_dagster.core_utils.dvc_utils import configure_cache, dvc_pull
+from mlops_system_dagster.core_utils.dvc_utils import (
+    configure_cache,
+    dvc_pull,
+    get_git_commit_hash,
+    get_git_branch,
+    get_git_repo_url,
+    get_dvc_data_hash,
+)
 from mlops_system_dagster.core_utils.schemas import (
     TrainFeaturesPayload,
     TrainValSplitPayload,
 )
 
 @asset
-def sync_biomass_data(context) -> Path:
-    """Ensure DVC-tracked biomass data present; return its directory path."""
+def sync_biomass_data(context) -> dict:
+    """Ensure DVC-tracked biomass data present; return directory path and version info."""
     data_dir = GIT_REPO_ROOT / "data" / "biomass"
     env = os.environ.copy()
     try:
@@ -44,19 +51,41 @@ def sync_biomass_data(context) -> Path:
         context.log.info("DVC sync complete")
     except Exception as e:
         raise RuntimeError(f"dvc pull failed: {e}") from e
-    return data_dir
+    
+    # Get version information for traceability
+    git_hash = get_git_commit_hash(GIT_REPO_ROOT)
+    git_branch = get_git_branch(GIT_REPO_ROOT)
+    git_repo_url = get_git_repo_url(GIT_REPO_ROOT)
+    dvc_hash = get_dvc_data_hash(GIT_REPO_ROOT, "data.dvc")
+    
+    context.add_output_metadata({
+        "git_commit": MetadataValue.text(git_hash or "unknown"),
+        "git_branch": MetadataValue.text(git_branch or "unknown"),
+        "git_repo_url": MetadataValue.text(git_repo_url or "unknown"),
+        "dvc_data_hash": MetadataValue.text(dvc_hash or "unknown"),
+    })
+    
+    return {
+        "data_dir": data_dir,
+        "git_commit": git_hash,
+        "git_branch": git_branch,
+        "git_repo_url": git_repo_url,
+        "dvc_data_hash": dvc_hash,
+    }
 
 @asset
-def train_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignore[override]
-    df = pd.read_csv(sync_biomass_data / "train.csv")
+def train_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: ignore[override]
+    data_dir = Path(sync_biomass_data["data_dir"])
+    df = pd.read_csv(data_dir / "train.csv")
     preview = df.head().to_markdown()
     context.add_output_metadata({"preview": MetadataValue.md(preview)})
     return df
 
 
 @asset
-def test_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignore[override]
-    path = sync_biomass_data / "test.csv"
+def test_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: ignore[override]
+    data_dir = Path(sync_biomass_data["data_dir"])
+    path = data_dir / "test.csv"
     if not path.exists():
         context.log.warning("test.csv not found; returning empty DataFrame")
         return pd.DataFrame()
@@ -67,8 +96,9 @@ def test_table(context, sync_biomass_data: Path) -> pd.DataFrame:  # type: ignor
 
 
 @asset
-def train_features(context, train_table: pd.DataFrame, sync_biomass_data: Path) -> dict:  # type: ignore[override]
-    images_dir = sync_biomass_data / "images" / "train"
+def train_features(context, train_table: pd.DataFrame, sync_biomass_data: dict) -> dict:  # type: ignore[override]
+    data_dir = Path(sync_biomass_data["data_dir"])
+    images_dir = data_dir / "images" / "train"
     X, y, scaler, preview_md = extract_train_features(train_table, images_dir, row_limit=ROW_LIMIT)
     payload = TrainFeaturesPayload(X=X, y=y, scaler=scaler)
     context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
@@ -76,9 +106,10 @@ def train_features(context, train_table: pd.DataFrame, sync_biomass_data: Path) 
 
 
 @asset
-def test_features(context, test_table: pd.DataFrame, train_features: dict, sync_biomass_data: Path) -> dict:  # type: ignore[override]
+def test_features(context, test_table: pd.DataFrame, train_features: dict, sync_biomass_data: dict) -> dict:  # type: ignore[override]
+    data_dir = Path(sync_biomass_data["data_dir"])
     X_train_scaler = train_features.get("scaler") if isinstance(train_features, dict) else None
-    images_dir = sync_biomass_data / "images" / "test"
+    images_dir = data_dir / "images" / "test"
     X, y, labels_present, preview_md = extract_test_features(
         test_table,
         images_dir,
@@ -134,7 +165,7 @@ def simple_model(context, train_val_split: dict, train_features: dict):  # type:
 
 
 @asset
-def mlflow_logged_model(context, simple_model, train_val_split: dict, train_features: dict):  # type: ignore[override]
+def mlflow_logged_model(context, simple_model, train_val_split: dict, train_features: dict, sync_biomass_data: dict):  # type: ignore[override]
     """Log the trained model (with preprocessing wrapper) to MLflow as pyfunc.
 
     Returns dict containing experiment_id and run_id (or None values if logging skipped).
@@ -153,13 +184,32 @@ def mlflow_logged_model(context, simple_model, train_val_split: dict, train_feat
         "image_mode": "L",
         "flatten": True,
     }
+    
+    # Extract version information
+    git_commit = sync_biomass_data.get("git_commit")
+    git_branch = sync_biomass_data.get("git_branch")
+    git_repo_url = sync_biomass_data.get("git_repo_url")
+    dvc_data_hash = sync_biomass_data.get("dvc_data_hash")
+    
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     mlflow.set_tracking_uri(tracking_uri)
 
     with mlflow.start_run(run_name="biomass_linear_regression") as run:
+        # Log parameters
         for k, v in params.items():
             if v is not None:
                 mlflow.log_param(k, v)
+        
+        # Log version info as parameters for better discoverability
+        if git_commit:
+            mlflow.log_param("git_commit", git_commit)
+        if git_branch:
+            mlflow.log_param("git_branch", git_branch)
+        if git_repo_url:
+            mlflow.log_param("git_repo_url", git_repo_url)
+        if dvc_data_hash:
+            mlflow.log_param("dvc_data_hash", dvc_data_hash)
+        
         # Use the actual package directory (not the parent 'src') so MLflow adds correct import path
         package_dir = GIT_REPO_ROOT / 'mlops-system-dagster' / 'src' / 'mlops_system_dagster'
         mlflow.pyfunc.log_model(
@@ -176,11 +226,16 @@ def mlflow_logged_model(context, simple_model, train_val_split: dict, train_feat
                 "mlflow_url": MetadataValue.url(
                     f"{tracking_uri.rstrip('/')}/#/experiments/{experiment_id}/runs/{run_id}"
                 ),
+                "git_commit": MetadataValue.text(git_commit or "unknown"),
+                "git_branch": MetadataValue.text(git_branch or "unknown"),
+                "git_repo_url": MetadataValue.text(git_repo_url or "unknown"),
+                "dvc_data_hash": MetadataValue.text(dvc_data_hash or "unknown"),
             }
         )
         context.log.info(
             f"Logged pyfunc model to MLflow (experiment {experiment_id}, run {run_id})"
         )
+        context.log.info(f"Version: git={git_commit} (branch={git_branch}), dvc_data={dvc_data_hash}")
     return {"experiment_id": experiment_id, "run_id": run_id, "regressor": simple_model}
 
 
