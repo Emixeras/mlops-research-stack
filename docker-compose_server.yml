@@ -50,8 +50,9 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.mlflow.rule=Host(`mlflow.nt.fh-koeln.de`)"
       - "traefik.http.services.mlflow.loadbalancer.server.port=5000"
-      - "traefik.http.routers.mlflow.middlewares=mlflow-auth"
+      - "traefik.http.routers.mlflow.middlewares=mlflow-auth,mlflow-headers"
       - "traefik.http.middlewares.mlflow-auth.basicauth.usersfile=/traefik-users.txt"
+      - "traefik.http.middlewares.mlflow-headers.headers.customrequestheaders.Host=mlflow.nt.fh-koeln.de"
     restart: unless-stopped
 
   dagster:
@@ -89,8 +90,9 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.dagster.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/dagster`)"
       - "traefik.http.services.dagster.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dagster.middlewares=dagster-auth"
+      - "traefik.http.routers.dagster.middlewares=dagster-auth,dagster-strip"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
+      - "traefik.http.middlewares.dagster-strip.stripprefix.prefixes=/dagster"
     restart: unless-stopped
 
   model-deployment:
