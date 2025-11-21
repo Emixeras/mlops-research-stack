@@ -150,4 +150,13 @@ if __name__ == "__main__":
         debugpy.wait_for_client()
     
     iface = build_interface()
-    iface.launch()
+    
+    root_path = os.getenv("GRADIO_ROOT_PATH", "")
+    server_name = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
+    
+    iface.launch(
+        server_name=server_name,
+        server_port=server_port,
+        root_path=root_path
+    )
