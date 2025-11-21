@@ -33,6 +33,8 @@ services:
   mlflow:
     build:
       context: /home/shared/mlops/2025_msc_felix_hagenbrock/mlflow-server
+    environment:
+      MLFLOW_SERVER_ALLOWED_HOSTS: mlflow.nt.fh-koeln.de,mlflow,127.0.0.1
     volumes:
       - /home/shared/mlops/system-state/mlflow_artifacts:/mlflow-artifacts
     depends_on:
