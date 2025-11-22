@@ -150,3 +150,15 @@ services:
       - "traefik.http.routers.gradio.middlewares=gradio-auth"
       - "traefik.http.middlewares.gradio-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
+
+  landing:
+    image: nginx:stable-alpine
+    volumes:
+      - /home/shared/mlops/2025_msc_felix_hagenbrock/deployment/landing:/usr/share/nginx/html:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.landing.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/welcome`)"
+      - "traefik.http.services.landing.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.landing-strip.stripprefix.prefixes=/welcome"
+      - "traefik.http.routers.landing.middlewares=landing-strip"
+    restart: unless-stopped
