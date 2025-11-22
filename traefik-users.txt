@@ -1,6 +1,0 @@
-# Basic Auth Users
-# Format: username:hashed-password
-# Generate with: docker run --rm httpd:2.4-alpine htpasswd -nb username password
-
-admin:$apr1$k3Ax2D61$xI5WtqLU0MfIhMS6Ov2rz/
-user:$apr1$vTxVXDxU$xfxvLNj.PZLibJLX1Vo2t1
