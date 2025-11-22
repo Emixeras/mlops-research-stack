@@ -123,7 +123,8 @@ services:
         condition: service_started
     command: [
       "dagster-daemon",
-      "run"
+      "run",
+      "-w", "/workspace/mlops-system-dagster/workspace.yaml"
     ]
     restart: unless-stopped
 
