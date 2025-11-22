@@ -34,7 +34,7 @@ services:
     build:
       context: /home/shared/mlops/2025_msc_felix_hagenbrock/mlflow-server
     environment:
-      MLFLOW_SERVER_ALLOWED_HOSTS: mlflow.nt.fh-koeln.de,mlflow,127.0.0.1,0.0.0.0
+      MLFLOW_SERVER_ALLOWED_HOSTS: "*"
     volumes:
       - /home/shared/mlops/system-state/mlflow_artifacts:/mlflow-artifacts
     depends_on:
@@ -86,14 +86,14 @@ services:
       "dagster-webserver",
       "-h", "0.0.0.0",
       "-p", "3000",
-      "-w", "/workspace/mlops-system-dagster/workspace.yaml"
+      "-w", "/workspace/mlops-system-dagster/workspace.yaml",
+      "--path-prefix", "/dagster"
     ]
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dagster.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/dagster`)"
       - "traefik.http.services.dagster.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dagster.middlewares=dagster-strip,dagster-auth"
-      - "traefik.http.middlewares.dagster-strip.stripprefix.prefixes=/dagster"
+      - "traefik.http.routers.dagster.middlewares=dagster-auth"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
 
