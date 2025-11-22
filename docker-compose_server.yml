@@ -86,7 +86,8 @@ services:
       "dagster", "dev",
       "-m", "mlops_system_dagster.definitions",
       "-h", "0.0.0.0",
-      "-p", "3000"
+      "-p", "3000",
+      "--path-prefix", "/dagster"
     ]
     labels:
       - "traefik.enable=true"
