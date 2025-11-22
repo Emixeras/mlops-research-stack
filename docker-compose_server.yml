@@ -72,11 +72,11 @@ services:
       - /home/shared/mlops/2025_msc_felix_hagenbrock:/workspace
       # Data
       - /home/shared/mlops/data:/workspace/data
+      # DVC Remote Storage (local access)
+      - /home/fhagenbr/dvc-storage-biomass:/dvc-remote-storage
       # System State
       - /home/shared/mlops/system-state/dagster_home:/dagster_home
       - /home/shared/mlops/system-state/dvc_cache:/dvc-cache
-      # SSH Keys für DVC
-      - /home/username/.ssh:/root/.ssh:ro
     depends_on:
       db:
         condition: service_healthy
@@ -111,11 +111,11 @@ services:
       - /home/shared/mlops/2025_msc_felix_hagenbrock:/workspace
       # Data
       - /home/shared/mlops/data:/workspace/data
+      # DVC Remote Storage (local access)
+      - /home/fhagenbr/dvc-storage-biomass:/dvc-remote-storage
       # System State
       - /home/shared/mlops/system-state/dagster_home:/dagster_home
       - /home/shared/mlops/system-state/dvc_cache:/dvc-cache
-      # SSH Keys für DVC
-      - /home/username/.ssh:/root/.ssh:ro
     depends_on:
       db:
         condition: service_healthy
