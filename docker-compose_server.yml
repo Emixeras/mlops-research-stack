@@ -97,6 +97,36 @@ services:
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
     restart: unless-stopped
 
+  dagster-daemon:
+    build:
+      context: /home/shared/mlops/2025_msc_felix_hagenbrock/mlops-system-dagster
+      dockerfile: Dockerfile
+    environment:
+      DAGSTER_HOME: /dagster_home
+      PYTHONPATH: /workspace/mlops-system-dagster/src
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      DVC_CACHE_DIR: /dvc-cache
+    volumes:
+      # Repo (Code + DVC)
+      - /home/shared/mlops/2025_msc_felix_hagenbrock:/workspace
+      # Data
+      - /home/shared/mlops/data:/workspace/data
+      # System State
+      - /home/shared/mlops/system-state/dagster_home:/dagster_home
+      - /home/shared/mlops/system-state/dvc_cache:/dvc-cache
+      # SSH Keys für DVC
+      - /home/username/.ssh:/root/.ssh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    command: [
+      "dagster-daemon",
+      "run"
+    ]
+    restart: unless-stopped
+
   model-deployment:
     build:
       context: /home/shared/mlops/2025_msc_felix_hagenbrock/model-deployment
