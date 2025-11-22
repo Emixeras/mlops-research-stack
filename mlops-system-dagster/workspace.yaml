@@ -1,0 +1,4 @@
+load_from:
+  - python_module:
+      module_name: mlops_system_dagster.definitions
+      working_directory: /workspace/mlops-system-dagster
