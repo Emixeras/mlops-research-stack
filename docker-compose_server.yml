@@ -92,9 +92,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.dagster.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/dagster`)"
       - "traefik.http.services.dagster.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dagster.middlewares=dagster-auth,dagster-strip"
+      - "traefik.http.routers.dagster.middlewares=dagster-auth"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
-      - "traefik.http.middlewares.dagster-strip.stripprefix.prefixes=/dagster"
     restart: unless-stopped
 
   model-deployment:

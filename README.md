@@ -83,3 +83,18 @@ DVC remote storage is implemented as an SSH server in the folder of `fhagenbr` o
 	```
 
 ---
+
+## Service Paths (Server deployment)
+
+When deployed with `docker-compose_server.yml` on the server `mlflow.nt.fh-koeln.de`, services are available at these paths and ports:
+
+- **Traefik (HTTP gateway)**: `http://mlflow.nt.fh-koeln.de:8090/` — root path proxies to MLflow.
+- **Traefik Dashboard**: `http://mlflow.nt.fh-koeln.de:8091/` — Traefik dashboard (useful to inspect routers and services).
+- **MLflow UI**: `http://mlflow.nt.fh-koeln.de:8090/` — MLflow served at `/` behind Traefik. Basic auth is enabled.
+- **Dagster UI**: `http://mlflow.nt.fh-koeln.de:8090/dagster` — routed with PathPrefix `/dagster`; the prefix is stripped before forwarding to the Dagster process.
+- **Gradio App**: `http://mlflow.nt.fh-koeln.de:8090/gradio` — routed with PathPrefix `/gradio`; Gradio is configured with `GRADIO_ROOT_PATH=/gradio`.
+
+Notes:
+- Basic auth is enabled for MLflow, Dagster and Gradio. Credentials are read from the file `/traefik-users.txt` inside the Traefik container.
+- If you run the local `docker-compose.yml` for development, use the local hostnames and ports defined there (e.g. `mlflow.localhost` on port `8000`).
+
