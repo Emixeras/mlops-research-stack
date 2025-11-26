@@ -9,5 +9,7 @@ dependencies = [
     "mlflow>=3.4.0",
     "psutil==7.1.0",
     "pandas",
-    "debugpy"
+    "debugpy",
+    "torch",
+    "torchvision"
 ]

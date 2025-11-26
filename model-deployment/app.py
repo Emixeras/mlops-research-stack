@@ -19,7 +19,7 @@ from mlflow.tracking import MlflowClient
 import gradio as gr
 import pandas as pd
 
-DEFAULT_TRACKING_URI = "http://localhost:5000"
+DEFAULT_TRACKING_URI = "http://mlflow.localhost:8000"
 
 
 def _init_tracking_uri() -> str:

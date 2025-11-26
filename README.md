@@ -8,13 +8,18 @@ This repository contains the design and implementation of a modern MLOps archite
 This repo includes a root-level `docker-compose.yml` to run Postgres (for MLflow), MLflow UI, and the Dagster webserver with hot reload.
 
 Services
+- `traefik`: Reverse proxy (http://localhost:8000), dashboard at http://localhost:8080
 - `db`: Postgres 15 (metadata for MLflow), data persisted in named volume `pg_data`
 - `mlflow`: MLflow server (http://localhost:5000), artifacts in named volume `mlflow_artifacts` and served via `--serve-artifacts`
 - `dagster`: Dagster webserver (http://localhost:3000), running `dagster dev` with code hot-reloaded from `mlops-system-dagster/src`
+- `model-deployment`: Gradio app (http://localhost:7860), serving the model
 
 Run
 ```powershell
-# Build images
+# Build and start services
+docker compose up --build
+```
+
 ## Project Structure
 
 - `data/biomass/` — Contains training and test CSVs and images
@@ -97,4 +102,19 @@ When deployed with `docker-compose_server.yml` on the server `mlflow.nt.fh-koeln
 Notes:
 - Basic auth is enabled for MLflow, Dagster and Gradio. Credentials are read from the file `/traefik-users.txt` inside the Traefik container.
 - If you run the local `docker-compose.yml` for development, use the local hostnames and ports defined there (e.g. `mlflow.localhost` on port `8000`).
+
+**Landing Page**
+- **Path**: `http://mlflow.nt.fh-koeln.de:8090/welcome` — a small static landing page that links to MLflow (`/`), Dagster (`/dagster`) and Gradio (`/gradio`).
+- **Source**: the HTML is stored in `deployment/landing/index.html` in this repository.
+- **Service**: served by the `landing` nginx service in `docker-compose_server.yml` and routed by Traefik using PathPrefix `/welcome`.
+- **How to start (server)**: start Traefik and the landing service only:
+
+```powershell
+docker compose -f docker-compose_server.yml up -d traefik landing
+```
+
+- **Notes**:
+	- Traefik applies a `stripPrefix` middleware so the upstream nginx receives requests without the `/welcome` prefix and serves the page correctly.
+	- Ensure the host path `\`/home/shared/mlops/2025_msc_felix_hagenbrock/deployment/landing\` exists and is readable by Docker on the server host.
+	- If you prefer the landing page at the root (`/`) instead of MLflow, rework the Traefik router rules and consider moving MLflow to a subpath (this will require updating `MLFLOW_SERVER_ALLOWED_HOSTS` and adjusting MLflow/Traefik labels).
 

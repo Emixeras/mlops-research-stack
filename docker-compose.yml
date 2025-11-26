@@ -34,6 +34,9 @@ services:
   mlflow:
     build:
       context: ./mlflow-server
+    environment:
+      MLFLOW_SERVER_ALLOWED_HOSTS: "mlflow.localhost:8000,mlflow.localhost,localhost,127.0.0.1,mlflow,mlflow:5000"
+      MLFLOW_TRACKING_SERVER_HOST: "0.0.0.0"
     volumes:
       - mlflow_artifacts:/mlflow-artifacts
     depends_on:
@@ -79,7 +82,7 @@ services:
         condition: service_started
     command: [
       "dagster", "dev",
-      "-m", "mlops_system_dagster.definitions",
+      "-w", "/workspace/mlops-system-dagster/workspace.yaml",
       "-h", "0.0.0.0",
       "-p", "3000"
     ]
@@ -91,6 +94,13 @@ services:
       # Enable Basic Auth (comment out to disable)
       - "traefik.http.routers.dagster.middlewares=dagster-auth"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
   model-deployment:
@@ -101,7 +111,7 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       GRADIO_SERVER_NAME: 0.0.0.0
       GRADIO_SERVER_PORT: 7860
-      #DEBUG: "1"  # Uncomment only when debugging
+      # DEBUG: "1"  # Uncomment only when debugging
     depends_on:
       mlflow:
         condition: service_started
