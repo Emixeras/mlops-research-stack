@@ -10,7 +10,9 @@ dependencies = [
     "Pillow",
     "mlflow",
     "debugpy",
-    "pydantic"
+    "pydantic",
+    "torch",
+    "torchvision"
 ]
 
 [project.optional-dependencies]

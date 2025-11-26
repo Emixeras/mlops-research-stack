@@ -15,7 +15,7 @@ class LinearRegressionBiomassModel(mlflow.pyfunc.PythonModel):
     Output: list of predictions.
     """
 
-    def __init__(self, scaler, regressor, config: dict | None = None):
+    def __init__(self, regressor, scaler, config: dict | None = None):
         self.scaler = scaler
         self.regressor = regressor
         self.config = {**DEFAULT_PREPROCESS_CONFIG, **(config or {})}

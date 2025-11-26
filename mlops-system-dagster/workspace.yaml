@@ -2,3 +2,12 @@ load_from:
   - python_module:
       module_name: mlops_system_dagster.definitions
       working_directory: /workspace/mlops-system-dagster
+      location_name: core_data_ingestion
+  - python_module:
+      module_name: code_locations.linear_regression.definitions
+      working_directory: /workspace/mlops-system-dagster/src
+      location_name: linear_regression_experiment
+  - python_module:
+      module_name: code_locations.resnet_experiment.definitions
+      working_directory: /workspace/mlops-system-dagster/src
+      location_name: resnet_experiment

@@ -17,4 +17,4 @@ def train_linear_regression(X, y) -> LinearRegression:
 
 def build_pyfunc_model(regressor, scaler, config: Dict[str, Any] | None = None) -> LinearRegressionBiomassModel:
     cfg = {**DEFAULT_PREPROCESS_CONFIG, **(config or {})}
-    return LinearRegressionBiomassModel(scaler=scaler, regressor=regressor, config=cfg)
+    return LinearRegressionBiomassModel(regressor=regressor, scaler=scaler, config=cfg)
