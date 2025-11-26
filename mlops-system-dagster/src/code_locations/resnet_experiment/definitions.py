@@ -278,6 +278,6 @@ def resnet_evaluation(context, train_val_split: dict, mlflow_logged_model: dict,
 defs = Definitions(
     assets=[sync_biomass_data, train_val_split, resnet_image_datasets, resnet_model, resnet_mlflow_logged_model, resnet_evaluation],
     resources={
-        "io_manager": FilesystemIOManager(base_dir="mlops-system-dagster/dagster_outputs"),
+        "io_manager": FilesystemIOManager(base_dir="/dagster_outputs"),
     }
 )

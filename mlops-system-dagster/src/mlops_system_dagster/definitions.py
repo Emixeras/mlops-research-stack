@@ -13,6 +13,6 @@ defs = Definitions(
     assets=all_assets,
     resources={
         # Use our new custom IO Manager
-        "io_manager": FilesystemIOManager(base_dir="mlops-system-dagster/dagster_outputs"),
+        "io_manager": FilesystemIOManager(base_dir="/dagster_outputs"),
     },
 )

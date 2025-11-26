@@ -240,6 +240,6 @@ defs = Definitions(
         linear_regression_evaluation,
     ],
     resources={
-        "io_manager": FilesystemIOManager(base_dir="mlops-system-dagster/dagster_outputs"),
+        "io_manager": FilesystemIOManager(base_dir="/dagster_outputs"),
     },
 )
