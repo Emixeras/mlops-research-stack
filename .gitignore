@@ -2,3 +2,5 @@
 traefik-users.txt
 /report
 /setup-scripts
+/dagster_outputs
+/production_inference

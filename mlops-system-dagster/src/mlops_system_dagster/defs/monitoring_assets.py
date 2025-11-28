@@ -90,6 +90,7 @@ def production_features(context, reference_features: pd.DataFrame):
 })
 def drift_report(context, reference_features: pd.DataFrame, production_features: pd.DataFrame):
     """Generates an HTML drift report comparing Train (Reference) vs Production (Current)."""
+    DRIFT_THRESHOLD = 0.25
     
     if production_features is None or production_features.empty:
         raise ValueError("No production data available.")
@@ -111,7 +112,7 @@ def drift_report(context, reference_features: pd.DataFrame, production_features:
     reference_sample = reference_features.astype(float)
     current_sample = current_data.astype(float)
     
-    context.log.info(f"Running drift detection on {len(reference_sample.columns)} columns")
+    context.log.info(f"Running drift detection on {len(reference_sample.columns)} columns (threshold: {DRIFT_THRESHOLD})")
     
     # Run Evidently Report
     report = Report([
@@ -119,6 +120,19 @@ def drift_report(context, reference_features: pd.DataFrame, production_features:
     ])
     
     snapshot = report.run(reference_sample, current_sample)
+    
+    # Extract drift metrics from snapshot
+    result_dict = snapshot.dict()
+    drift_metric = next((m for m in result_dict['metrics'] if 'DriftedColumns' in m['metric_name']), None)
+    
+    if drift_metric:
+        drift_share = drift_metric['value']['share']
+        drifted_count = drift_metric['value']['count']
+        dataset_drift_detected = drift_share >= DRIFT_THRESHOLD
+    else:
+        drift_share = None
+        drifted_count = None
+        dataset_drift_detected = None
     
     # Save HTML Report
     output_path = Path("/dagster_outputs/drift_report.html")
@@ -129,7 +143,11 @@ def drift_report(context, reference_features: pd.DataFrame, production_features:
         "report_path": MetadataValue.path(str(output_path)),
         "n_reference": len(reference_features),
         "n_current": len(current_data),
-        "n_features_analyzed": len(reference_features.columns)
+        "n_features_analyzed": len(reference_features.columns),
+        "drift_threshold": DRIFT_THRESHOLD,
+        "dataset_drift_detected": dataset_drift_detected,
+        "drift_share": f"{drift_share:.2%}" if drift_share is not None else "N/A",
+        "drifted_columns_count": int(drifted_count) if drifted_count is not None else "N/A"
     })
     
     return str(output_path)
