@@ -4,10 +4,10 @@ from dagster import (
     load_assets_from_modules,
 )
 
-from .defs import assets
+from .defs import assets, monitoring_assets
 
 
-all_assets = load_assets_from_modules([assets])
+all_assets = load_assets_from_modules([assets, monitoring_assets])
 
 defs = Definitions(
     assets=all_assets,

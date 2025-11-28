@@ -72,6 +72,8 @@ services:
     volumes:
     # need the workspace(repo root) for dvc/data
       - .:/workspace
+      - ./production_inference:/workspace/production_inference
+      - ./dagster_outputs:/dagster_outputs
       - dagster_home:/dagster_home
       - dvc_cache:/dvc-cache
       - ${USERPROFILE}/.ssh:/root/.ssh:ro
@@ -117,6 +119,8 @@ services:
         condition: service_started
     ports:
     - "5678:5678"  # Debug port
+    volumes:
+      - ./production_inference:/workspace/production_inference
     command: [
       "python", "app.py"
     ]

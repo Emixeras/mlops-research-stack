@@ -72,6 +72,8 @@ services:
       - /home/shared/mlops/2025_msc_felix_hagenbrock:/workspace
       # Data
       - /home/shared/mlops/data:/workspace/data
+      # Production Inference Logs
+      - /home/shared/mlops/production_inference:/workspace/production_inference
       # DVC Remote Storage (local access)
       - /home/shared/mlops/dvc-storage-biomass:/dvc-remote-storage
       # System State
@@ -112,6 +114,8 @@ services:
       - /home/shared/mlops/2025_msc_felix_hagenbrock:/workspace
       # Data
       - /home/shared/mlops/data:/workspace/data
+      # Production Inference Logs
+      - /home/shared/mlops/production_inference:/workspace/production_inference
       # DVC Remote Storage (local access)
       - /home/shared/mlops/dvc-storage-biomass:/dvc-remote-storage
       # System State
@@ -139,6 +143,8 @@ services:
       GRADIO_SERVER_NAME: 0.0.0.0
       GRADIO_SERVER_PORT: 7860
       GRADIO_ROOT_PATH: /gradio
+    volumes:
+      - /home/shared/mlops/production_inference:/workspace/production_inference
     depends_on:
       mlflow:
         condition: service_started

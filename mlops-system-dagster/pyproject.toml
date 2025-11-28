@@ -12,7 +12,8 @@ dependencies = [
     "debugpy",
     "pydantic",
     "torch",
-    "torchvision"
+    "torchvision",
+    "evidently>=0.4.0"
 ]
 
 [project.optional-dependencies]

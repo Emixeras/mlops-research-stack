@@ -18,8 +18,42 @@ import mlflow
 from mlflow.tracking import MlflowClient
 import gradio as gr
 import pandas as pd
+import csv
+from datetime import datetime
+from pathlib import Path
 
 DEFAULT_TRACKING_URI = "http://mlflow.localhost:8000"
+
+# Logging configuration
+LOG_DIR = Path("/workspace/production_inference")
+IMAGES_DIR = LOG_DIR / "images"
+LOG_FILE = LOG_DIR / "inference_log.csv"
+
+# Ensure directories exist
+IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Initialize CSV header if file doesn't exist
+if not LOG_FILE.exists():
+    with open(LOG_FILE, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "filepath", "prediction", "model_version"])
+
+def log_inference(filename: str, image_bytes: bytes, prediction: float, model_uri: str):
+    """Logs an inference request to disk."""
+    timestamp = datetime.now().isoformat()
+    # Sanitize filename to avoid path traversal or weird characters
+    safe_filename = Path(filename).name
+    saved_path = IMAGES_DIR / f"{timestamp}_{safe_filename}"
+    
+    # 1. Save Image
+    with open(saved_path, "wb") as f:
+        f.write(image_bytes)
+    
+    # 2. Log Metadata
+    with open(LOG_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([timestamp, str(saved_path), prediction, model_uri])
+
 
 
 def _init_tracking_uri() -> str:
@@ -86,10 +120,19 @@ def predict(model_uri: str, files: Optional[List[gr.File]]) -> pd.DataFrame:
     names: List[str] = []
     for f in files:
         with open(f.name, "rb") as fh:
-            payload.append(fh.read())
+            content = fh.read()
+            payload.append(content)
         names.append(os.path.basename(f.name))
 
     preds: List[float] = model.predict(payload)  # type: ignore
+    
+    # Log each prediction
+    for name, content, pred in zip(names, payload, preds):
+        try:
+            log_inference(name, content, float(pred), model_uri)
+        except Exception as e:
+            print(f"Failed to log inference for {name}: {e}")
+
     df = pd.DataFrame({"filename": names, "prediction": preds})
     return df
 
