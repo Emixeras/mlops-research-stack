@@ -64,6 +64,7 @@ services:
     build:
       context: ./mlops-system-dagster
       dockerfile: Dockerfile
+    shm_size: '2gb'
     environment:
       DAGSTER_HOME: /dagster_home
       PYTHONPATH: /workspace/mlops-system-dagster/src

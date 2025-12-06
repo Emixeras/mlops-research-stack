@@ -61,6 +61,7 @@ services:
     build:
       context: /home/shared/mlops/2025_msc_felix_hagenbrock/mlops-system-dagster
       dockerfile: Dockerfile
+    shm_size: '4gb'
     environment:
       DAGSTER_HOME: /dagster_home
       PYTHONPATH: /workspace/mlops-system-dagster/src
@@ -111,6 +112,7 @@ services:
     build:
       context: /home/shared/mlops/2025_msc_felix_hagenbrock/mlops-system-dagster
       dockerfile: Dockerfile
+    shm_size: '4gb'
     environment:
       DAGSTER_HOME: /dagster_home
       PYTHONPATH: /workspace/mlops-system-dagster/src
