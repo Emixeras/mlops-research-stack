@@ -54,10 +54,25 @@ Quick guide to migrate the MLOps system to a new server.
    ./setup-permissions.sh
    ```
 
-6. **Update Hostname:**
-   Edit `docker-compose_server.yml` and replace all instances of `mlflow.nt.fh-koeln.de` with your new server's hostname.
+6. **Configure DVC for Local Remote:**
+   Create `.dvc/config.local` with local DVC remote settings:
+   ```bash
+   cd /home/shared/mlops/2025_msc_felix_hagenbrock
+   cat > .dvc/config.local << 'EOF'
+   [cache]
+       dir = /dvc-cache
+       type = "reflink,hardlink,symlink,copy"
+   [core]
+       remote = local_remote
+   ['remote "local_remote"']
+       url = /dvc-remote-storage
+   EOF
+   ```
 
-7. **Start System:**
+7. **Update Hostname:**
+   Edit `docker-compose_server.yml` and replace all instances of the old hostname with your new server's hostname (if not already done).
+
+8. **Start System:**
    ```bash
    cd /home/shared/mlops/2025_msc_felix_hagenbrock
    docker compose -f docker-compose_server.yml up -d --build
