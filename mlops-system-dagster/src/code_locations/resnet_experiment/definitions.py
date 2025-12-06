@@ -22,7 +22,7 @@ class ResNetConfig(Config):
     freeze_layers: bool = True
     num_epochs: int = 15
     learning_rate: float = 1e-3
-    batch_size: int = 16
+    batch_size: int = 64
 
 @asset(ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def resnet_image_datasets(context, train_val_split: dict, sync_biomass_data: dict):
@@ -66,9 +66,22 @@ def resnet_model(context, resnet_image_datasets: dict, config: ResNetConfig):
     train_dataset = resnet_image_datasets["train_dataset"]
     val_dataset = resnet_image_datasets["val_dataset"]
     
-    # Loaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    # Loaders - optimized for GPU training
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True,
+        num_workers=8,          # Parallel data loading
+        pin_memory=True,        # Fast CPU->GPU transfer
+        persistent_workers=True # Keep workers alive between epochs
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False,
+        num_workers=4,          # Fewer workers for validation
+        pin_memory=True
+    )
     
     # Model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
