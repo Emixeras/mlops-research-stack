@@ -12,10 +12,10 @@ from .defs import assets, monitoring_assets
 
 all_assets = load_assets_from_modules([assets, monitoring_assets])
 
-# Job for drift monitoring with in-process executor (Evidently doesn't work well with multiprocess)
+# Job for drift monitoring with in-process executor (Evidently has multiprocess issues)
 drift_monitoring_job = define_asset_job(
     name="drift_monitoring",
-    selection=AssetSelection.assets("drift_report"),
+    selection=AssetSelection.assets("reference_features", "production_features", "drift_report"),
     executor_def=in_process_executor,
 )
 
