@@ -41,20 +41,32 @@ Quick guide to migrate the MLOps system to a new server.
    sudo git clone https://git-ce.rwth-aachen.de/ai4science/plant_biomass/2025_msc_felix_hagenbrock.git
    ```
 
-4. **Create mlops Group:**
+4. **Create Traefik Users File:**
+   Generate basic auth credentials (or copy existing `traefik-users.txt`):
+   ```bash
+   # Option 1: Copy from old server (if available locally)
+   # cp /path/to/old/traefik-users.txt /home/shared/mlops/2025_msc_felix_hagenbrock/
+   
+   # Option 2: Create new users
+   cd /home/shared/mlops/2025_msc_felix_hagenbrock
+   htpasswd -c traefik-users.txt admin
+   htpasswd traefik-users.txt user
+   ```
+
+6. **Create mlops Group:**
    ```bash
    sudo groupadd mlops
    sudo usermod -aG mlops $USER
    ```
 
-5. **Restore Permissions:**
+7. **Restore Permissions:**
    ```bash
    cd /home/shared/mlops/2025_msc_felix_hagenbrock/setup-scripts
    chmod +x setup-permissions.sh
    ./setup-permissions.sh
    ```
 
-6. **Configure DVC for Local Remote:**
+8. **Configure DVC for Local Remote:**
    Create `.dvc/config.local` with local DVC remote settings:
    ```bash
    cd /home/shared/mlops/2025_msc_felix_hagenbrock
@@ -69,10 +81,10 @@ Quick guide to migrate the MLOps system to a new server.
    EOF
    ```
 
-7. **Update Hostname:**
+9. **Update Hostname:**
    Edit `docker-compose_server.yml` and replace all instances of the old hostname with your new server's hostname (if not already done).
 
-8. **Start System:**
+10. **Start System:**
    ```bash
    cd /home/shared/mlops/2025_msc_felix_hagenbrock
    docker compose -f docker-compose_server.yml up -d --build

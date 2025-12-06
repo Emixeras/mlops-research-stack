@@ -13,7 +13,8 @@ dependencies = [
     "pydantic",
     "torch",
     "torchvision",
-    "evidently>=0.4.0"
+    "evidently>=0.4.0",
+    "sniffio>=1.3.0"
 ]
 
 [project.optional-dependencies]
