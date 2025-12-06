@@ -38,7 +38,7 @@ Quick guide to migrate the MLOps system to a new server.
 3. **Clone Repository:**
    ```bash
    cd /home/shared/mlops
-   sudo git clone <your-git-url> 2025_msc_felix_hagenbrock
+   sudo git clone https://git-ce.rwth-aachen.de/ai4science/plant_biomass/2025_msc_felix_hagenbrock.git
    ```
 
 4. **Create mlops Group:**
