@@ -50,11 +50,11 @@ services:
     ]
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mlflow.rule=Host(`mlflow.nt.fh-koeln.de`)"
+      - "traefik.http.routers.mlflow.rule=Host(`luke.nt.fh-koeln.de`)"
       - "traefik.http.services.mlflow.loadbalancer.server.port=5000"
       - "traefik.http.routers.mlflow.middlewares=mlflow-auth,mlflow-headers"
       - "traefik.http.middlewares.mlflow-auth.basicauth.usersfile=/traefik-users.txt"
-      - "traefik.http.middlewares.mlflow-headers.headers.customrequestheaders.Host=mlflow.nt.fh-koeln.de"
+      - "traefik.http.middlewares.mlflow-headers.headers.customrequestheaders.Host=luke.nt.fh-koeln.de"
     restart: unless-stopped
 
   dagster:
@@ -94,7 +94,7 @@ services:
     ]
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dagster.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/dagster`)"
+      - "traefik.http.routers.dagster.rule=Host(`luke.nt.fh-koeln.de`) && PathPrefix(`/dagster`)"
       - "traefik.http.services.dagster.loadbalancer.server.port=3000"
       - "traefik.http.routers.dagster.middlewares=dagster-auth"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
@@ -153,7 +153,7 @@ services:
     ]
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.gradio.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/gradio`)"
+      - "traefik.http.routers.gradio.rule=Host(`luke.nt.fh-koeln.de`) && PathPrefix(`/gradio`)"
       - "traefik.http.services.gradio.loadbalancer.server.port=7860"
       - "traefik.http.routers.gradio.middlewares=gradio-auth"
       - "traefik.http.middlewares.gradio-auth.basicauth.usersfile=/traefik-users.txt"
@@ -165,7 +165,7 @@ services:
       - /home/shared/mlops/2025_msc_felix_hagenbrock/deployment/landing:/usr/share/nginx/html:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.landing.rule=Host(`mlflow.nt.fh-koeln.de`) && PathPrefix(`/welcome`)"
+      - "traefik.http.routers.landing.rule=Host(`luke.nt.fh-koeln.de`) && PathPrefix(`/welcome`)"
       - "traefik.http.services.landing.loadbalancer.server.port=80"
       - "traefik.http.middlewares.landing-strip.stripprefix.prefixes=/welcome"
       - "traefik.http.routers.landing.middlewares=landing-strip"

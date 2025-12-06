@@ -11,6 +11,7 @@ Quick guide to migrate the MLOps system to a new server.
    ```
 
 2. **Create Archive (excludes git repo):**
+    Takes a few mins since we also transfer the whole dataset.
    ```bash
    cd /home/shared/mlops
    sudo tar -czvf mlops_migration.tar.gz --exclude='2025_msc_felix_hagenbrock' .
@@ -18,9 +19,8 @@ Quick guide to migrate the MLOps system to a new server.
 
 3. **Transfer to New Server:**
    ```bash
-   # From local machine or directly between servers
-   scp user@old-server:/home/shared/mlops/mlops_migration.tar.gz .
-   scp mlops_migration.tar.gz user@new-server:/tmp/
+   # direct transfer if both hare in same network
+    scp /home/shared/mlops/mlops_migration.tar.gz user@new-server:/tmp/
    ```
 
 ## Phase 2: NEW Server (Unpack & Setup)
@@ -54,7 +54,10 @@ Quick guide to migrate the MLOps system to a new server.
    ./setup-permissions.sh
    ```
 
-6. **Start System:**
+6. **Update Hostname:**
+   Edit `docker-compose_server.yml` and replace all instances of `mlflow.nt.fh-koeln.de` with your new server's hostname.
+
+7. **Start System:**
    ```bash
    cd /home/shared/mlops/2025_msc_felix_hagenbrock
    docker compose -f docker-compose_server.yml up -d --build
