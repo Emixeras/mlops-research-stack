@@ -91,6 +91,7 @@ def production_features(context, reference_features: pd.DataFrame):
 def drift_report(context, reference_features: pd.DataFrame, production_features: pd.DataFrame):
     """Generates an HTML drift report comparing Train (Reference) vs Production (Current)."""
     DRIFT_THRESHOLD = 0.25
+    SAMPLE_COLUMNS = 100  # Sample 100 columns for drift detection
     
     if production_features is None or production_features.empty:
         raise ValueError("No production data available.")
@@ -111,6 +112,16 @@ def drift_report(context, reference_features: pd.DataFrame, production_features:
     # Convert to float for Evidently compatibility
     reference_sample = reference_features.astype(float)
     current_sample = current_data.astype(float)
+    
+    # Sample columns for performance
+    total_cols = len(reference_sample.columns)
+    if total_cols > SAMPLE_COLUMNS:
+        # Sample evenly distributed columns
+        step = total_cols // SAMPLE_COLUMNS
+        sampled_cols = reference_sample.columns[::step][:SAMPLE_COLUMNS].tolist()
+        reference_sample = reference_sample[sampled_cols]
+        current_sample = current_sample[sampled_cols]
+        context.log.info(f"Sampled {len(sampled_cols)} columns out of {total_cols} for drift detection")
     
     context.log.info(f"Running drift detection on {len(reference_sample.columns)} columns (threshold: {DRIFT_THRESHOLD})")
     
@@ -143,7 +154,8 @@ def drift_report(context, reference_features: pd.DataFrame, production_features:
         "report_path": MetadataValue.path(str(output_path)),
         "n_reference": len(reference_features),
         "n_current": len(current_data),
-        "n_features_analyzed": len(reference_features.columns),
+        "n_features_total": total_cols,
+        "n_features_analyzed": len(reference_sample.columns),
         "drift_threshold": DRIFT_THRESHOLD,
         "dataset_drift_detected": dataset_drift_detected,
         "drift_share": f"{drift_share:.2%}" if drift_share is not None else "N/A",
