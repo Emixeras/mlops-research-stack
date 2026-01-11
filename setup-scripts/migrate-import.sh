@@ -100,15 +100,23 @@ fi
 sudo git clone "$GIT_URL_WITH_CREDS" 2025_msc_felix_hagenbrock
 echo_info "Repository cloned."
 
-# Step 4: Create Traefik Users File
-echo_info "[4/9] Creating Traefik users file..."
+# Step 4: Setup Traefik Users File
+echo_info "[4/9] Setting up Traefik users file..."
 TRAEFIK_FILE="${REPO_DIR}/traefik-users.txt"
-sudo bash -c "cat > $TRAEFIK_FILE" <<EOF
-${TRAEFIK_USER_ADMIN}
-${TRAEFIK_USER_VIEWER:-}
-EOF
-sudo chmod 644 "$TRAEFIK_FILE"
-echo_info "Traefik users configured."
+
+if [[ -f "/tmp/traefik-users.txt" ]]; then
+    # Copy existing traefik-users.txt from old server
+    echo_info "Using existing traefik-users.txt from old server..."
+    sudo cp /tmp/traefik-users.txt "$TRAEFIK_FILE"
+    sudo chmod 644 "$TRAEFIK_FILE"
+    echo_info "Traefik users copied from old server."
+else
+    # Create new traefik-users.txt (for fresh installations)
+    echo_warn "No traefik-users.txt transferred. Creating placeholder..."
+    echo_info "You need to create users manually with: htpasswd -c ${TRAEFIK_FILE} username"
+    sudo touch "$TRAEFIK_FILE"
+    sudo chmod 644 "$TRAEFIK_FILE"
+fi
 
 # Step 5: Create mlops Group
 echo_info "[5/9] Creating mlops group..."

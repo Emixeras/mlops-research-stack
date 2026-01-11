@@ -95,9 +95,17 @@ echo_info "Destination: ${NEW_SERVER_USER}@${NEW_SERVER_HOST}:/tmp/"
 sudo scp "$ARCHIVE_FILE" "${NEW_SERVER_USER}@${NEW_SERVER_HOST}:/tmp/"
 
 # Transfer migration scripts and config
-echo_info "Transferring migration scripts..."
+echo_info "Transferring migration scripts and configuration..."
 scp "${SCRIPT_DIR}/migrate-import.sh" "${NEW_SERVER_USER}@${NEW_SERVER_HOST}:/tmp/"
 scp "${ENV_FILE}" "${NEW_SERVER_USER}@${NEW_SERVER_HOST}:/tmp/.env.migration"
+
+# Transfer existing traefik-users.txt if it exists
+if [[ -f "${REPO_DIR}/traefik-users.txt" ]]; then
+    echo_info "Transferring existing traefik-users.txt..."
+    scp "${REPO_DIR}/traefik-users.txt" "${NEW_SERVER_USER}@${NEW_SERVER_HOST}:/tmp/traefik-users.txt"
+else
+    echo_warn "No traefik-users.txt found. You'll need to create it on the new server."
+fi
 
 echo ""
 echo_info "=========================================="
@@ -107,6 +115,7 @@ echo_info "Transferred to new server /tmp/:"
 echo_info "  • mlops_migration.tar.gz"
 echo_info "  • migrate-import.sh"
 echo_info "  • .env.migration"
+echo_info "  • traefik-users.txt (if existed)"
 echo ""
 echo_info "Next steps:"
 echo_info "  1. SSH to new server: ssh ${NEW_SERVER_USER}@${NEW_SERVER_HOST}"
