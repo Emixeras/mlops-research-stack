@@ -70,6 +70,7 @@ else
     echo_warn "No running containers found."
 fi
 
+# This did not work in my test case probably because the server ran out of memory while archiving the big dataset
 # Step 2: Create Archive
 echo_info "[2/3] Creating migration archive (this may take several minutes)..."
 cd "$MLOPS_DIR"
