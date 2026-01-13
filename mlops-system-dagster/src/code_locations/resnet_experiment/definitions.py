@@ -71,15 +71,15 @@ def resnet_model(context, resnet_image_datasets: dict, config: ResNetConfig):
         train_dataset, 
         batch_size=batch_size, 
         shuffle=True,
-        num_workers=8,          # Parallel data loading
+        num_workers=2,          # Reduced to avoid blocking Dagster heartbeat
         pin_memory=True,        # Fast CPU->GPU transfer
-        persistent_workers=True # Keep workers alive between epochs
+        persistent_workers=False # Avoid holding resources between epochs
     )
     val_loader = DataLoader(
         val_dataset, 
         batch_size=batch_size, 
         shuffle=False,
-        num_workers=4,          # Fewer workers for validation
+        num_workers=2,          # Reduced for validation
         pin_memory=True
     )
     
