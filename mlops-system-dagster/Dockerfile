@@ -1,4 +1,4 @@
-FROM python:3.12.1-slim
+FROM python:3.12-slim
 
 # Work from the repository root to make DVC paths and cwd intuitive
 WORKDIR /workspace
