@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12.1-slim
 
 # Work from the repository root to make DVC paths and cwd intuitive
 WORKDIR /workspace
@@ -17,8 +17,8 @@ COPY src ./src
 
 # Install the project in editable mode with dev extras from pyproject
 # Ensures training environment matches serving (Gradio app also on 3.12)
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .[dev]
+# Use python -m pip to avoid segfaults with pip upgrade
+RUN python -m pip install --no-cache-dir -e .[dev]
 
 # Create dagster home
 RUN mkdir -p /dagster_home && chmod -R 777 /dagster_home
