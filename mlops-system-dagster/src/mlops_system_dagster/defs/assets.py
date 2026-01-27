@@ -36,7 +36,7 @@ from mlops_system_dagster.core_utils.schemas import (
     TrainValSplitPayload,
 )
 
-@asset
+@asset(group_name="core_data_ingestion")
 def sync_biomass_data(context) -> dict:
     """Ensure DVC-tracked biomass data present; return directory path and version info."""
     data_dir = GIT_REPO_ROOT / "data" / "biomass"
@@ -74,7 +74,7 @@ def sync_biomass_data(context) -> dict:
         "dvc_data_hash": dvc_hash,
     }
 
-@asset
+@asset(group_name="core_data_ingestion")
 def train_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: ignore[override]
     data_dir = Path(sync_biomass_data["data_dir"])
     df = pd.read_csv(data_dir / "train.csv")
@@ -83,7 +83,7 @@ def train_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: igno
     return df
 
 
-@asset
+@asset(group_name="core_data_ingestion")
 def test_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: ignore[override]
     data_dir = Path(sync_biomass_data["data_dir"])
     path = data_dir / "test.csv"
@@ -97,7 +97,7 @@ def test_table(context, sync_biomass_data: dict) -> pd.DataFrame:  # type: ignor
 
 
 
-@asset
+@asset(group_name="core_data_ingestion")
 def train_val_split(context, train_table: pd.DataFrame, config: TrainValSplitConfig) -> dict:
     """Splits the training table into train and validation sets based on config."""
     test_size = config.test_size

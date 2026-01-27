@@ -48,7 +48,7 @@ from mlops_system_dagster.core_utils.schemas import TrainFeaturesPayload
 sync_biomass_data = SourceAsset(key=AssetKey("sync_biomass_data"))
 train_val_split = SourceAsset(key=AssetKey("train_val_split"))
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="linear_regression_experiment", ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 
 def lr_train_features(context, train_val_split: dict, sync_biomass_data: dict) -> dict:
     """Extract features from the training split."""
@@ -67,7 +67,7 @@ def lr_train_features(context, train_val_split: dict, sync_biomass_data: dict) -
         "scaler": scaler
     }
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "lr_train_features": AssetIn("lr_train_features"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="linear_regression_experiment", ins={"train_val_split": AssetIn("train_val_split"), "lr_train_features": AssetIn("lr_train_features"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def lr_val_features(context, train_val_split: dict, lr_train_features: dict, sync_biomass_data: dict) -> dict:
     """Extract features from the validation split using the scaler from training."""
     data_dir = Path(sync_biomass_data["data_dir"])
@@ -89,7 +89,7 @@ def lr_val_features(context, train_val_split: dict, lr_train_features: dict, syn
     context.add_output_metadata({"preview": MetadataValue.md(preview_md)})
     return {"X": X, "y": y}
 
-@asset(ins={"lr_train_features": AssetIn("lr_train_features")})
+@asset(group_name="linear_regression_experiment", ins={"lr_train_features": AssetIn("lr_train_features")})
 def linear_regression_model(context, lr_train_features: dict):
     X_train = lr_train_features["X"]
     y_train = lr_train_features["y"]
@@ -116,7 +116,7 @@ def linear_regression_model(context, lr_train_features: dict):
         "scaler": scaler,
     }
 
-@asset(ins={"trained_model": AssetIn("linear_regression_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="linear_regression_experiment", ins={"trained_model": AssetIn("linear_regression_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def linear_regression_mlflow_logged_model(context, trained_model: dict, sync_biomass_data: dict):
     """
     Logs the trained Linear Regression model to MLflow.
@@ -199,7 +199,7 @@ def linear_regression_mlflow_logged_model(context, trained_model: dict, sync_bio
         "pyfunc_model": pyfunc_model
     }
 
-@asset(ins={"lr_val_features": AssetIn("lr_val_features"), "mlflow_logged_model": AssetIn("linear_regression_mlflow_logged_model")})
+@asset(group_name="linear_regression_experiment", ins={"lr_val_features": AssetIn("lr_val_features"), "mlflow_logged_model": AssetIn("linear_regression_mlflow_logged_model")})
 def linear_regression_evaluation(context, lr_val_features: dict, mlflow_logged_model: dict):
     """Compute validation metrics using the same fitted regressor bundled in mlflow_logged_model and log to that run."""
     

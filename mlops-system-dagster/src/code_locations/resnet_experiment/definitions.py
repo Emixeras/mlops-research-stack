@@ -24,7 +24,7 @@ class ResNetConfig(Config):
     learning_rate: float = 1e-3
     batch_size: int = 64
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="resnet_experiment", ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def resnet_image_datasets(context, train_val_split: dict, sync_biomass_data: dict):
     """
     Creates PyTorch Datasets for training and validation.
@@ -50,7 +50,7 @@ def resnet_image_datasets(context, train_val_split: dict, sync_biomass_data: dic
     
     return {"train_dataset": train_dataset, "val_dataset": val_dataset}
 
-@asset(ins={"resnet_image_datasets": AssetIn("resnet_image_datasets")})
+@asset(group_name="resnet_experiment", ins={"resnet_image_datasets": AssetIn("resnet_image_datasets")})
 def resnet_model(context, resnet_image_datasets: dict, config: ResNetConfig):
     """
     Trains a ResNet regressor using the prepared datasets.
@@ -162,7 +162,7 @@ def resnet_model(context, resnet_image_datasets: dict, config: ResNetConfig):
         "params": params,
     }
 
-@asset(ins={"trained_model": AssetIn("resnet_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="resnet_experiment", ins={"trained_model": AssetIn("resnet_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def resnet_mlflow_logged_model(context, trained_model: dict, sync_biomass_data: dict):
     """
     Logs the trained ResNet model to MLflow.
@@ -238,7 +238,7 @@ def resnet_mlflow_logged_model(context, trained_model: dict, sync_biomass_data: 
         "pyfunc_model": pyfunc_model
     }
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "mlflow_logged_model": AssetIn("resnet_mlflow_logged_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="resnet_experiment", ins={"train_val_split": AssetIn("train_val_split"), "mlflow_logged_model": AssetIn("resnet_mlflow_logged_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def resnet_evaluation(context, train_val_split: dict, mlflow_logged_model: dict, sync_biomass_data: dict):
     """
     Evaluates the ResNet model using the PyFunc wrapper.

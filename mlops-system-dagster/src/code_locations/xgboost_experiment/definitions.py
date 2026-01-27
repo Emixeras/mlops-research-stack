@@ -20,7 +20,7 @@ sync_biomass_data = SourceAsset(key=AssetKey("sync_biomass_data"))
 train_val_split = SourceAsset(key=AssetKey("train_val_split"))
 
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="xgboost_experiment", ins={"train_val_split": AssetIn("train_val_split"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def xgboost_train_features(context, train_val_split: dict, sync_biomass_data: dict) -> dict:
     """Extract features from the training split for XGBoost."""
     data_dir = Path(sync_biomass_data["data_dir"])
@@ -40,7 +40,7 @@ def xgboost_train_features(context, train_val_split: dict, sync_biomass_data: di
     }
 
 
-@asset(ins={"train_val_split": AssetIn("train_val_split"), "xgboost_train_features": AssetIn("xgboost_train_features"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="xgboost_experiment", ins={"train_val_split": AssetIn("train_val_split"), "xgboost_train_features": AssetIn("xgboost_train_features"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def xgboost_val_features(context, train_val_split: dict, xgboost_train_features: dict, sync_biomass_data: dict) -> dict:
     """Extract features from the validation split using the scaler from training."""
     data_dir = Path(sync_biomass_data["data_dir"])
@@ -62,7 +62,7 @@ def xgboost_val_features(context, train_val_split: dict, xgboost_train_features:
     return {"X": X, "y": y}
 
 
-@asset(ins={"xgboost_train_features": AssetIn("xgboost_train_features")})
+@asset(group_name="xgboost_experiment", ins={"xgboost_train_features": AssetIn("xgboost_train_features")})
 def xgboost_model(context, xgboost_train_features: dict):
     """Train XGBoost model."""
     X_train = xgboost_train_features["X"]
@@ -105,7 +105,7 @@ def xgboost_model(context, xgboost_train_features: dict):
     }
 
 
-@asset(ins={"trained_model": AssetIn("xgboost_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
+@asset(group_name="xgboost_experiment", ins={"trained_model": AssetIn("xgboost_model"), "sync_biomass_data": AssetIn("sync_biomass_data")})
 def xgboost_mlflow_logged_model(context, trained_model: dict, sync_biomass_data: dict):
     """Log XGBoost model to MLflow with PyFunc wrapper for Gradio compatibility."""
     
@@ -188,7 +188,7 @@ def xgboost_mlflow_logged_model(context, trained_model: dict, sync_biomass_data:
     }
 
 
-@asset(ins={"xgboost_val_features": AssetIn("xgboost_val_features"), "mlflow_logged_model": AssetIn("xgboost_mlflow_logged_model")})
+@asset(group_name="xgboost_experiment", ins={"xgboost_val_features": AssetIn("xgboost_val_features"), "mlflow_logged_model": AssetIn("xgboost_mlflow_logged_model")})
 def xgboost_evaluation(context, xgboost_val_features: dict, mlflow_logged_model: dict):
     """Evaluate the XGBoost model using the PyFunc wrapper."""
     from mlops_system_dagster.core_utils.evaluation import calculate_regression_metrics, preview_markdown
