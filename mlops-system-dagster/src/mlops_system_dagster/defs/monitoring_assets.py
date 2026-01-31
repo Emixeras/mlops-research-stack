@@ -6,7 +6,7 @@ from mlops_system_dagster.core_utils.preprocessing import load_and_flatten, extr
 from evidently import Report
 from evidently.presets import DataDriftPreset
 
-@asset(ins={
+@asset(group_name="monitoring", ins={
     "train_val_split": AssetIn("train_val_split"),
     "sync_biomass_data": AssetIn("sync_biomass_data")
 })
@@ -41,7 +41,7 @@ def reference_features(context, train_val_split: dict, sync_biomass_data: dict):
     
     return X_ref
 
-@asset(ins={"reference_features": AssetIn("reference_features")})
+@asset(group_name="monitoring", ins={"reference_features": AssetIn("reference_features")})
 def production_features(context, reference_features: pd.DataFrame):
     """Loads production logs and computes unscaled features for drift detection."""
     log_file = Path("/workspace/production_inference/inference_log.csv")
@@ -84,7 +84,7 @@ def production_features(context, reference_features: pd.DataFrame):
     
     return X_prod
 
-@asset(ins={
+@asset(group_name="monitoring", ins={
     "reference_features": AssetIn("reference_features"), 
     "production_features": AssetIn("production_features")
 })

@@ -10,11 +10,11 @@ Dependencies
 Quick Usage
 - Prompt for password and print the htpasswd line:
 ```
-python scripts/gen_htpasswd.py admin
+python auth-scripts/gen_htpasswd.py admin
 ```
 - Provide password on the command line (convenient when you already generated one):
 ```
-python scripts/gen_htpasswd.py admin 'MyS3cureP@ss'
+python auth-scripts/gen_htpasswd.py admin 'MyS3cureP@ss'
 ```
 
 What it prints
@@ -30,7 +30,7 @@ Security notes
 Updating `traefik-users.txt`
 - Manually paste the printed line into `traefik-users.txt` on the server, or use the script output redirection:
 ```
-python scripts/gen_htpasswd.py admin 'MyS3cureP@ss' > traefik-users.txt
+python auth-scripts/gen_htpasswd.py admin 'MyS3cureP@ss' > traefik-users.txt
 ```
 - After updating the file on the server, restart Traefik to reload credentials:
 ```

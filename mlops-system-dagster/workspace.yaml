@@ -3,11 +3,27 @@ load_from:
       module_name: mlops_system_dagster.definitions
       working_directory: /workspace/mlops-system-dagster
       location_name: core_data_ingestion
+      attribute: defs
+      code_source:
+        package_name: mlops_system_dagster
   - python_module:
       module_name: code_locations.linear_regression.definitions
       working_directory: /workspace/mlops-system-dagster/src
       location_name: linear_regression_experiment
+      attribute: defs
+      code_source:
+        package_name: code_locations.linear_regression
   - python_module:
       module_name: code_locations.resnet_experiment.definitions
       working_directory: /workspace/mlops-system-dagster/src
       location_name: resnet_experiment
+      attribute: defs
+      code_source:
+        package_name: code_locations.resnet_experiment
+  - python_module:
+      module_name: code_locations.xgboost_experiment.definitions
+      working_directory: /workspace/mlops-system-dagster/src
+      location_name: xgboost_experiment
+      attribute: defs
+      code_source:
+        package_name: code_locations.xgboost_experiment

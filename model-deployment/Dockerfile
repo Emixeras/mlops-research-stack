@@ -10,9 +10,8 @@ RUN apt-get update && apt-get install -y \
 # Copy project metadata first for layer caching
 COPY pyproject.toml ./
 
-# Install with pip (simple; could switch to uv/wheels if desired)
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+# Install with pip - avoid pip upgrade in same command to prevent segfault
+RUN python -m pip install --no-cache-dir .
 
 # Copy source code (only app.py needed but copy all for flexibility)
 COPY app.py ./
