@@ -1,5 +1,11 @@
 # Automated Migration Scripts
 
+> **⚠️ DEPRECATED:** These scripts did not work during testing and are no longer maintained. The migration was performed manually instead.
+> 
+> **→ Use [SERVER_MIGRATION.md](SERVER_MIGRATION.md) for the working manual migration procedure.**
+
+---
+
 Quick guide to migrate the MLOps system to a new server using automated scripts.
 
 ## Overview

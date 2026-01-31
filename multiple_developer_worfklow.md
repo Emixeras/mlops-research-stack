@@ -1,5 +1,9 @@
 # Multi-Developer Workflow mit Dagster Code Locations
 
+> **⚠️ DEPRECATED:** This workflow document is outdated. The project uses a simpler workflow with only code locations instead.
+
+---
+
 ## Ziel
 
 Mehrere Entwickler arbeiten parallel an ML-Experimenten (z.B. verschiedene Modelle), nutzen aber gemeinsam:
