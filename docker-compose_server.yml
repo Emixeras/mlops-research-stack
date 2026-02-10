@@ -99,13 +99,6 @@ services:
       - "traefik.http.services.dagster.loadbalancer.server.port=3000"
       - "traefik.http.routers.dagster.middlewares=dagster-auth"
       - "traefik.http.middlewares.dagster-auth.basicauth.usersfile=/traefik-users.txt"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
 
   dagster-daemon:
@@ -141,13 +134,6 @@ services:
       "run",
       "-w", "/workspace/mlops-system-dagster/workspace.yaml"
     ]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
 
   model-deployment:
