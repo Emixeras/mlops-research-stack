@@ -61,7 +61,10 @@ A modular MLOps architecture for plant biomass prediction using machine learning
 ├── model-deployment/                  # Gradio inference application
 ├── mlflow-server/                     # MLflow server Docker setup
 ├── deployment/landing/                # Static landing page
-├── setup-scripts/                     # Server migration documentation
+├── setup-scripts/                     # Server setup & migration
+│   ├── setup-new-deployment.sh        # Fresh server deployment (automated)
+│   ├── setup-permissions.sh           # Restore filesystem permissions
+│   └── SERVER_MIGRATION.md            # Migration from existing server
 ├── auth-scripts/                      # Authentication utilities (htpasswd generation)
 └── production_inference/              # Logged inference requests
 ```
@@ -129,13 +132,19 @@ When deployed with `docker-compose_server.yml` on `luke.nt.fh-koeln.de`:
 - DVC Storage: `/home/shared/mlops/dvc-storage-biomass`
 - System State: `/home/shared/mlops/system-state/`
 
-**Start server**:
+**Fresh deployment** (new server, no existing data):
+```bash
+sudo bash setup-scripts/setup-new-deployment.sh luke.nt.fh-koeln.de <admin-user>
+```
+This creates the required directory layout, sets permissions, clones the repo, configures DVC, generates `traefik-users.txt`, and starts all services.
+
+**Start server** (existing installation):
 ```bash
 cd /home/shared/mlops/2025_msc_felix_hagenbrock
 docker compose -f docker-compose_server.yml up -d --build
 ```
 
-For migration procedures, see [setup-scripts/SERVER_MIGRATION.md](setup-scripts/SERVER_MIGRATION.md).
+For migration procedures (moving from an existing server), see [setup-scripts/SERVER_MIGRATION.md](setup-scripts/SERVER_MIGRATION.md).
 
 ---
 
@@ -216,7 +225,8 @@ See [mlops-system-dagster/README.md](mlops-system-dagster/README.md) and [model-
 |----------|-------------|
 | [mlops-system-dagster/README.md](mlops-system-dagster/README.md) | Dagster setup, debugging, adding experiments |
 | [model-deployment/README.md](model-deployment/README.md) | Gradio app configuration and debugging |
-| [setup-scripts/SERVER_MIGRATION.md](setup-scripts/SERVER_MIGRATION.md) | Server migration procedures |
+| [setup-scripts/setup-new-deployment.sh](setup-scripts/setup-new-deployment.sh) | Automated fresh server deployment |
+| [setup-scripts/SERVER_MIGRATION.md](setup-scripts/SERVER_MIGRATION.md) | Migration from an existing server |
 | [auth-scripts/README.md](auth-scripts/README.md) | Authentication utilities (htpasswd generation) |
 | [presentation/VIDEO_SCRIPT.md](presentation/VIDEO_SCRIPT.md) | Video tutorial script |
 
