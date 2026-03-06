@@ -1,5 +1,11 @@
 # Server Migration Guide
 
+> **Fresh deployment?** Use the automated script instead:
+> ```bash
+> sudo bash setup-scripts/setup-new-deployment.sh <hostname> <admin-user>
+> ```
+> See `setup-new-deployment.sh` for details. The steps below document a *migration* from an existing server.
+
 Quick guide to migrate the MLOps system to a new server.
 
 ## Phase 1: OLD Server (Pack & Export)
