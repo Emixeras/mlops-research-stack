@@ -1,6 +1,8 @@
-# Plant Biomass Prediction MLOps System
+# MLOps Research Stack
 
-A modular MLOps architecture for plant biomass prediction using machine learning, featuring pipeline orchestration with Dagster, experiment tracking with MLflow, data versioning with DVC, and model deployment with Gradio.
+> This project was developed as part of a research project at TH Köln in the [AI4Science Group](https://www.ai4science.group/).
+
+A modular, self-hosted MLOps stack for collaborative research, featuring pipeline orchestration with Dagster, experiment tracking with MLflow, data versioning with DVC, and model deployment with Gradio. While the current use case is **plant biomass prediction**, the architecture is domain-agnostic and can serve as a template for any research ML project.
 
 > **📺 Video Tutorial:** A comprehensive walkthrough is available at [YouTube](https://www.youtube.com/watch?v=_aYcRDScQdc) (German, 36 min).
 
