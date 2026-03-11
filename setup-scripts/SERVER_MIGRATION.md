@@ -2,7 +2,7 @@
 
 > **Fresh deployment?** Use the automated script instead:
 > ```bash
-> sudo bash setup-scripts/setup-new-deployment.sh <hostname> <admin-user>
+> sudo bash setup-scripts/setup-new-deployment.sh <hostname> <admin-user> <git-user> <git-pat>
 > ```
 > See `setup-new-deployment.sh` for details. The steps below document a *migration* from an existing server.
 

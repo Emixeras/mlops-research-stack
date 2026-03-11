@@ -33,6 +33,35 @@ A modular MLOps architecture for plant biomass prediction using machine learning
    - Gradio: http://gradio.localhost:8000
    - Traefik Dashboard: http://localhost:8080
 
+### Server Deployment (Fresh)
+
+1. **Run the setup script** (requires root, Docker, Git):
+   ```bash
+   sudo bash setup-scripts/setup-new-deployment.sh <hostname> <admin-user> <git-user> <git-pat>
+   ```
+   This creates the filesystem layout, clones the repo, configures DVC, and starts Docker Compose.
+
+2. **Create Traefik auth file** (if `htpasswd` was not available during setup):
+   ```bash
+   apt install apache2-utils
+   htpasswd -c /home/shared/mlops/2025_msc_felix_hagenbrock/traefik-users.txt admin
+   ```
+
+3. **Populate training data** (the script creates empty directories — data must be added manually):
+   - **Option A** — Pull from DVC SSH remote (requires SSH access to the source server):
+     ```bash
+     cd /home/shared/mlops/2025_msc_felix_hagenbrock && dvc pull
+     ```
+   - **Option B** — Copy directly from an existing server:
+     ```bash
+     rsync -a user@old-server:/home/shared/mlops/data/ /home/shared/mlops/data/
+     rsync -a user@old-server:/home/shared/mlops/dvc-storage-biomass/ /home/shared/mlops/dvc-storage-biomass/
+     ```
+   - **Option C** — Pull via Dagster after startup (fetches from DVC remote configured in `.dvc/config.local`):
+     Materialize the `sync_biomass_data` asset in the Dagster UI.
+
+> `system-state/` (Postgres, MLflow artifacts, Dagster home) is generated at runtime and does not need to be seeded on a fresh deployment. For migrating an existing server, see [setup-scripts/SERVER_MIGRATION.md](setup-scripts/SERVER_MIGRATION.md).
+
 ---
 
 ## Project Structure
@@ -134,7 +163,7 @@ When deployed with `docker-compose_server.yml` on `luke.nt.fh-koeln.de`:
 
 **Fresh deployment** (new server, no existing data):
 ```bash
-sudo bash setup-scripts/setup-new-deployment.sh luke.nt.fh-koeln.de <admin-user>
+sudo bash setup-scripts/setup-new-deployment.sh luke.nt.fh-koeln.de <admin-user> <git-user> <git-pat>
 ```
 This creates the required directory layout, sets permissions, clones the repo, configures DVC, generates `traefik-users.txt`, and starts all services.
 

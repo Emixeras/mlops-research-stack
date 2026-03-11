@@ -8,14 +8,15 @@
 # configures DVC, sets up authentication, and starts Docker Compose.
 #
 # Usage:
-#   sudo bash setup-new-deployment.sh [HOSTNAME] [ADMIN_USER]
+#   sudo bash setup-new-deployment.sh [HOSTNAME] [ADMIN_USER] [GIT_USERNAME] [GIT_PAT]
 #
-#   HOSTNAME    - The public hostname for Traefik routing
-#                 (e.g. luke.nt.fh-koeln.de)
-#   ADMIN_USER  - Linux user that will run the system (defaults to $SUDO_USER)
+#   HOSTNAME     - The public hostname for Traefik routing (e.g. luke.nt.fh-koeln.de)
+#   ADMIN_USER   - Linux user that will run the system (defaults to $SUDO_USER)
+#   GIT_USERNAME - GitLab username for cloning the private repo
+#   GIT_PAT      - GitLab personal access token (or password)
 #
 # Example:
-#   sudo bash setup-new-deployment.sh luke.nt.fh-koeln.de pascal
+#   sudo bash setup-new-deployment.sh luke.nt.fh-koeln.de pascal myuser mytoken
 # =============================================================================
 
 set -euo pipefail
@@ -27,8 +28,10 @@ BASE_DIR="/home/shared/mlops"
 REPO_URL="https://git-ce.rwth-aachen.de/ai4science/plant_biomass/2025_msc_felix_hagenbrock.git"
 REPO_DIR="$BASE_DIR/2025_msc_felix_hagenbrock"
 
-HOSTNAME="${1:-}"
+SERVER_HOSTNAME="${1:-}"
 ADMIN_USER="${2:-${SUDO_USER:-$USER}}"
+GIT_USERNAME="${3:-}"
+GIT_PAT="${4:-}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,6 +40,16 @@ info()  { echo "[INFO]  $*"; }
 warn()  { echo "[WARN]  $*"; }
 die()   { echo "[ERROR] $*" >&2; exit 1; }
 
+# In dry-run mode, print commands instead of executing them.
+DRY_RUN="${DRY_RUN:-0}"
+run() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "[DRY-RUN] $*"
+    else
+        "$@"
+    fi
+}
+
 require_root() {
     [ "$(id -u)" -eq 0 ] || die "This script must be run as root (sudo)."
 }
@@ -44,14 +57,22 @@ require_root() {
 # ---------------------------------------------------------------------------
 # 0. Pre-flight checks
 # ---------------------------------------------------------------------------
-require_root
+[ "$DRY_RUN" = "1" ] || require_root
 
-if [ -z "$HOSTNAME" ]; then
-    read -rp "Enter the public hostname for this server (e.g. myserver.example.com): " HOSTNAME
-    [ -n "$HOSTNAME" ] || die "Hostname cannot be empty."
+if [ -z "$SERVER_HOSTNAME" ]; then
+    read -rp "Enter the public hostname for this server (e.g. myserver.example.com): " SERVER_HOSTNAME
+    [ -n "$SERVER_HOSTNAME" ] || die "Hostname cannot be empty."
 fi
 
-info "Deploying to hostname: $HOSTNAME"
+if [ -z "$GIT_USERNAME" ]; then
+    read -rp "GitLab username for cloning the repo: " GIT_USERNAME
+fi
+if [ -z "$GIT_PAT" ]; then
+    read -rsp "GitLab personal access token (input hidden): " GIT_PAT
+    echo
+fi
+
+info "Deploying to hostname: $SERVER_HOSTNAME"
 info "Admin user: $ADMIN_USER"
 
 command -v docker  >/dev/null 2>&1 || die "Docker is not installed. Install it first."
@@ -63,14 +84,14 @@ command -v htpasswd >/dev/null 2>&1 || warn "htpasswd not found – you must cre
 # ---------------------------------------------------------------------------
 info "Setting up mlops group..."
 if ! getent group mlops >/dev/null 2>&1; then
-    groupadd mlops
+    run groupadd mlops
     info "  Created group: mlops"
 else
     info "  Group mlops already exists – skipping."
 fi
 
 if id "$ADMIN_USER" >/dev/null 2>&1; then
-    usermod -aG mlops "$ADMIN_USER"
+    run usermod -aG mlops "$ADMIN_USER"
     info "  Added $ADMIN_USER to mlops group."
 else
     warn "  User '$ADMIN_USER' not found – skipping group assignment."
@@ -96,7 +117,7 @@ fi
 # ---------------------------------------------------------------------------
 info "Creating directory structure under $BASE_DIR..."
 
-mkdir -p \
+run mkdir -p \
     "$BASE_DIR/data" \
     "$BASE_DIR/dvc-storage-biomass" \
     "$BASE_DIR/production_inference" \
@@ -107,22 +128,22 @@ mkdir -p \
     "$BASE_DIR/system-state/postgres"
 
 # Base ownership
-chown -R root:root "$BASE_DIR"
-chmod -R 755 "$BASE_DIR"
+run chown -R root:root "$BASE_DIR"
+run chmod -R 755 "$BASE_DIR"
 
 # dvc-storage-biomass: shared write access for mlops group (SGID)
-chown -R root:mlops "$BASE_DIR/dvc-storage-biomass"
-chmod -R 775 "$BASE_DIR/dvc-storage-biomass"
-find "$BASE_DIR/dvc-storage-biomass" -type d -exec chmod g+s {} +
+run chown -R root:mlops "$BASE_DIR/dvc-storage-biomass"
+run chmod -R 775 "$BASE_DIR/dvc-storage-biomass"
+run find "$BASE_DIR/dvc-storage-biomass" -type d -exec chmod g+s {} +
 
 # dagster_outputs: group-readable by mlops (SGID)
-chown -R root:mlops "$BASE_DIR/system-state/dagster_outputs"
-chmod -R 750 "$BASE_DIR/system-state/dagster_outputs"
-find "$BASE_DIR/system-state/dagster_outputs" -type d -exec chmod g+s {} +
+run chown -R root:mlops "$BASE_DIR/system-state/dagster_outputs"
+run chmod -R 750 "$BASE_DIR/system-state/dagster_outputs"
+run find "$BASE_DIR/system-state/dagster_outputs" -type d -exec chmod g+s {} +
 
 # postgres: must be owned by UID 999 (postgres container user)
-chown -R 999:root "$BASE_DIR/system-state/postgres"
-chmod -R 700 "$BASE_DIR/system-state/postgres"
+run chown -R 999:root "$BASE_DIR/system-state/postgres"
+run chmod -R 700 "$BASE_DIR/system-state/postgres"
 
 info "Directory structure created."
 
@@ -133,8 +154,12 @@ if [ -d "$REPO_DIR/.git" ]; then
     info "Repository already cloned at $REPO_DIR – skipping."
 else
     info "Cloning repository into $REPO_DIR..."
-    git clone "$REPO_URL" "$REPO_DIR"
-    chown -R root:root "$REPO_DIR"
+    # Embed credentials in URL for non-interactive clone of the private repo
+    REPO_URL_AUTH=$(echo "$REPO_URL" | sed "s|https://|https://${GIT_USERNAME}:${GIT_PAT}@|")
+    run git clone "$REPO_URL_AUTH" "$REPO_DIR"
+    # Remove embedded credentials from the remote URL in the cloned repo
+    run git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+    run chown -R root:root "$REPO_DIR"
 fi
 
 # ---------------------------------------------------------------------------
@@ -142,9 +167,10 @@ fi
 # ---------------------------------------------------------------------------
 COMPOSE_FILE="$REPO_DIR/docker-compose_server.yml"
 if [ -f "$COMPOSE_FILE" ]; then
-    info "Updating hostname to '$HOSTNAME' in docker-compose_server.yml..."
-    # Replace any existing Host(...) rule with the new hostname
-    sed -i "s/Host(\`[^)]*\`)/Host(\`$HOSTNAME\`)/g" "$COMPOSE_FILE"
+    info "Updating hostname to '$SERVER_HOSTNAME' in docker-compose_server.yml..."
+    # Replace any existing Host(`...`) rule with the new hostname.
+    # Pattern uses [^\`]* to match any chars except backtick (safe, no backtracking needed).
+    run sed -i "s/Host(\`[^\`]*\`)/Host(\`$SERVER_HOSTNAME\`)/g" "$COMPOSE_FILE"
 else
     warn "docker-compose_server.yml not found at $COMPOSE_FILE – skipping hostname update."
 fi
@@ -154,8 +180,11 @@ fi
 # ---------------------------------------------------------------------------
 info "Configuring DVC local remote..."
 DVC_CONFIG_LOCAL="$REPO_DIR/.dvc/config.local"
-mkdir -p "$REPO_DIR/.dvc"
-cat > "$DVC_CONFIG_LOCAL" << 'EOF'
+run mkdir -p "$REPO_DIR/.dvc"
+if [ "$DRY_RUN" = "1" ]; then
+    echo "[DRY-RUN] write $DVC_CONFIG_LOCAL"
+else
+    cat > "$DVC_CONFIG_LOCAL" << 'EOF'
 [cache]
     dir = /dvc-cache
     type = "reflink,hardlink,symlink,copy"
@@ -164,6 +193,7 @@ cat > "$DVC_CONFIG_LOCAL" << 'EOF'
 ['remote "local_remote"']
     url = /dvc-remote-storage
 EOF
+fi
 info "  Written: $DVC_CONFIG_LOCAL"
 
 # ---------------------------------------------------------------------------
@@ -174,13 +204,17 @@ if [ -f "$TRAEFIK_USERS" ]; then
     info "traefik-users.txt already exists – skipping."
 elif command -v htpasswd >/dev/null 2>&1; then
     info "Creating traefik-users.txt (you will be prompted for passwords)..."
-    read -rp "  Enter username for admin account [admin]: " TRAEFIK_ADMIN
-    TRAEFIK_ADMIN="${TRAEFIK_ADMIN:-admin}"
-    htpasswd -c "$TRAEFIK_USERS" "$TRAEFIK_ADMIN"
-    read -rp "  Add another user? (y/N): " ADD_USER
-    if [[ "$ADD_USER" =~ ^[Yy]$ ]]; then
-        read -rp "  Username: " TRAEFIK_USER2
-        htpasswd "$TRAEFIK_USERS" "$TRAEFIK_USER2"
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "[DRY-RUN] htpasswd -c $TRAEFIK_USERS <admin>"
+    else
+        read -rp "  Enter username for admin account [admin]: " TRAEFIK_ADMIN
+        TRAEFIK_ADMIN="${TRAEFIK_ADMIN:-admin}"
+        htpasswd -c "$TRAEFIK_USERS" "$TRAEFIK_ADMIN"
+        read -rp "  Add another user? (y/N): " ADD_USER
+        if [[ "$ADD_USER" =~ ^[Yy]$ ]]; then
+            read -rp "  Username: " TRAEFIK_USER2
+            htpasswd "$TRAEFIK_USERS" "$TRAEFIK_USER2"
+        fi
     fi
     info "  traefik-users.txt created."
 else
@@ -193,8 +227,8 @@ fi
 # 7. Start the system
 # ---------------------------------------------------------------------------
 info "Starting Docker Compose stack..."
-cd "$REPO_DIR"
-docker compose -f docker-compose_server.yml up -d --build
+[ "$DRY_RUN" = "1" ] || cd "$REPO_DIR"
+run docker compose -f docker-compose_server.yml up -d --build
 
 # ---------------------------------------------------------------------------
 # 8. Summary
@@ -204,19 +238,32 @@ echo "============================================================"
 echo "  Deployment complete!"
 echo "============================================================"
 echo ""
-echo "  Hostname : $HOSTNAME"
+echo "  Hostname : $SERVER_HOSTNAME"
 echo "  Base dir : $BASE_DIR"
 echo "  Repo     : $REPO_DIR"
 echo ""
 echo "  Services :"
-echo "    Landing  http://$HOSTNAME:8090/welcome"
-echo "    MLflow   http://$HOSTNAME:8090/"
-echo "    Dagster  http://$HOSTNAME:8090/dagster"
-echo "    Gradio   http://$HOSTNAME:8090/gradio"
-echo "    Traefik  http://$HOSTNAME:8091  (dashboard)"
+echo "    Landing  http://$SERVER_HOSTNAME:8090/welcome"
+echo "    MLflow   http://$SERVER_HOSTNAME:8090/"
+echo "    Dagster  http://$SERVER_HOSTNAME:8090/dagster"
+echo "    Gradio   http://$SERVER_HOSTNAME:8090/gradio"
+echo "    Traefik  http://$SERVER_HOSTNAME:8091  (dashboard)"
 echo ""
 echo "  Next steps (if not done yet):"
-echo "    - Pull data via DVC:  cd $REPO_DIR && dvc pull"
-echo "    - Verify services:    docker compose -f docker-compose_server.yml ps"
-echo "    - Check logs:         docker compose -f docker-compose_server.yml logs -f"
+echo "    1. Install htpasswd and create Traefik auth file (if not done during setup):"
+echo "       apt install apache2-utils"
+echo "       htpasswd -c $REPO_DIR/traefik-users.txt admin"
+echo ""
+echo "    2. Populate training data (fresh deployment – no data yet):"
+echo "       Option A: Pull from DVC SSH remote (requires SSH access to old server):"
+echo "         cd $REPO_DIR && dvc pull"
+echo "       Option B: Copy from old server via scp/rsync:"
+echo "         rsync -a user@old-server:/home/shared/mlops/data/ $BASE_DIR/data/"
+echo "         rsync -a user@old-server:/home/shared/mlops/dvc-storage-biomass/ $BASE_DIR/dvc-storage-biomass/"
+echo ""
+echo "    3. Verify services:   docker compose -f docker-compose_server.yml ps"
+echo "    4. Check logs:        docker compose -f docker-compose_server.yml logs -f"
+echo ""
+echo "  Note: system-state/ (Postgres, MLflow artifacts, Dagster state) is"
+echo "  generated at runtime – nothing to copy on a fresh deployment."
 echo ""
